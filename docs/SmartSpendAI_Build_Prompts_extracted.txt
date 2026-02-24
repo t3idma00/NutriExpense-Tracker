@@ -1,0 +1,859 @@
+﻿SmartSpend AI
+Intelligent Daily Expense & Nutrition Tracker
+COMPLETE DEVELOPER PROMPT GUIDE
+React Native • OCR • AI Nutrition • Health Alerts • Multi-Language
+Version 1.0  |  2025
+Table of Contents
+1.  Project Overview & Architecture	3
+2.  Technology Stack & Dependencies	4
+3.  Project Initialization Prompts	5
+4.  Database Schema & Local Storage	6
+5.  Camera & OCR Receipt Scanning	8
+6.  Expense Management Module	10
+7.  Nutrition Label Scanning & AI Inference	12
+8.  Nutrition Analytics Dashboard	14
+9.  Health Profile & Smart Alerts	16
+10.  Language Detection & Translation	18
+11.  UI/UX Design System	19
+12.  Testing, Performance & Deployment	22
+13.  Master Build Sequence	23
+1. Project Overview & Architecture
+SmartSpend AI is a cross-platform mobile application (iOS & Android) built with React Native that combines receipt/bill scanning, intelligent OCR extraction, AI-powered nutrition analysis, and health-aware alerting into a single seamless experience. It is designed for day-to-day use by health-conscious consumers who want to track both spending and dietary intake from the same shopping activity.
+1.1 Core Feature Pillars
+Receipt & Bill Scanning — Camera-based capture with ML-powered OCR to extract item names, prices, quantities, dates, and store metadata.
+Expense Database — SQLite-backed persistent storage for large item lists with category, subcategory, expiry date, currency, and custom tags.
+Nutrition Label Scanning — Dedicated OCR pipeline for FDA/international nutrition panels; structured nutrient extraction.
+AI Nutrition Inference — When no label is present, Claude AI estimates nutrient profile based on ingredient text and product name.
+Nutrition Analytics — Daily, weekly, and monthly averages with trend charts for all macro and micronutrients.
+Health Profile Engine — Calculates BMR, TDEE, and personalized RDA targets from user biometrics; triggers alerts for deficiencies.
+Language Detection & Translation — Automatic language identification and on-device/cloud translation of foreign receipts and labels.
+1.2 System Architecture
+┌─────────────────────────────────────────────────────┐
+│                 REACT NATIVE APP                     │
+│  ┌─────────────┐  ┌───────────────┐  ┌───────────┐ │
+│  │  UI Layer   │  │  State Layer  │  │  Service  │ │
+│  │ (RN Paper + │  │  (Zustand +   │  │  Layer    │ │
+│  │  Skia)      │  │  React Query) │  │           │ │
+│  └──────┬──────┘  └──────┬────────┘  └─────┬─────┘ │
+│         │                │                 │        │
+│  ┌──────▼──────────────────────────────────▼─────┐  │
+│  │              DOMAIN MODULES                   │  │
+│  │  Receipt  │ Expense │ Nutrition │ Health │ i18n│  │
+│  └──────┬────────┬──────────┬─────────┬─────┬───┘  │
+│         │        │          │         │     │       │
+│  ┌──────▼──────┐ │   ┌──────▼──────┐  │     │       │
+│  │ Vision Cam  │ │   │  ML Kit /   │  │     │       │
+│  │  + Camera   │ │   │  Tesseract  │  │     │       │
+│  └─────────────┘ │   └─────────────┘  │     │       │
+│            ┌─────▼──────────────────┐  │     │       │
+│            │    SQLite (Drizzle)    │  │     │       │
+│            └────────────────────────┘  │     │       │
+└────────────────────────────────────────┼─────┼───────┘
+                                         │     │
+                              ┌──────────▼─┐ ┌─▼──────────┐
+                              │ Claude API │ │Google Translate│
+                              │(Nutrition  │ │  / MLKit   │
+                              │ Inference) │ │LanguageID  │
+                              └────────────┘ └────────────┘
+2. Technology Stack & Dependencies
+2.1 Core Framework
+Package / Library
+Version / Source
+Purpose
+react-native
+0.74+
+Cross-platform mobile framework (iOS & Android)
+expo
+~51 (managed workflow)
+Toolchain, build system, and SDK extensions
+expo-router
+v3
+File-system based navigation (stack + tabs)
+typescript
+5.x
+Type safety across the entire codebase
+react
+18.x
+UI component rendering engine
+2.2 Camera & OCR
+Package / Library
+Version / Source
+Purpose
+expo-camera
+~15.x
+Full camera control with live preview
+react-native-vision-camera
+v4
+High-performance camera with frame processors
+@react-native-ml-kit/text-recognition
+latest
+Google ML Kit on-device OCR (offline)
+tesseract.js
+5.x (fallback)
+WASM-based OCR for complex receipts
+react-native-image-picker
+7.x
+Gallery image import
+expo-image-manipulator
+~12.x
+Pre-processing: crop, rotate, enhance contrast
+2.3 Database & Storage
+Package / Library
+Version / Source
+Purpose
+expo-sqlite
+~14.x
+SQLite engine built into Expo SDK
+drizzle-orm
+0.30+
+Type-safe ORM with schema migrations
+drizzle-kit
+latest (dev)
+Migration generator and studio for SQLite
+@react-native-async-storage/async-storage
+2.x
+Key-value store for preferences
+expo-file-system
+~17.x
+File I/O for receipt image storage
+expo-crypto
+~13.x
+UUID generation for record IDs
+2.4 State Management & Data Fetching
+Package / Library
+Version / Source
+Purpose
+zustand
+4.x
+Lightweight global state for UI and user profile
+@tanstack/react-query
+5.x
+Server-state, caching, and async data fetching
+immer
+10.x
+Immutable state updates in Zustand slices
+zod
+3.x
+Runtime schema validation for OCR extracted data
+2.5 AI & Translation
+Package / Library
+Version / Source
+Purpose
+@anthropic-ai/sdk
+0.22+
+Claude API client for AI nutrition inference
+@react-native-ml-kit/language-id
+latest
+On-device language detection (offline)
+@react-native-ml-kit/translate
+latest
+On-device translation (downloadable models)
+expo-localization
+~15.x
+Device locale and timezone detection
+i18next
+23.x
+Internationalization framework
+react-i18next
+15.x
+React bindings for i18next
+2.6 UI & Visualization
+Package / Library
+Version / Source
+Purpose
+react-native-paper
+5.x
+Material Design 3 component library
+@shopify/react-native-skia
+1.x
+High-performance 2D canvas for custom UI
+react-native-gifted-charts
+1.x
+Charts: line, bar, pie, ring gauges
+react-native-reanimated
+3.x
+Fluid 60fps animations
+react-native-gesture-handler
+2.x
+Native-quality gestures and swipe actions
+expo-blur
+~13.x
+iOS-style blur effects for modals
+react-native-fast-image
+8.x
+Optimized image rendering with caching
+lottie-react-native
+6.x
+JSON-based micro-animations
+react-native-linear-gradient
+2.x
+Gradient backgrounds and cards
+2.7 Notifications & Permissions
+Package / Library
+Version / Source
+Purpose
+expo-notifications
+~0.28.x
+Local push notifications for health alerts
+expo-permissions
+built-in SDK 50+
+Camera, notification, media library permissions
+expo-haptics
+~13.x
+Tactile feedback for scan confirmations
+expo-barcode-scanner
+~13.x
+Barcode/QR scanning for product lookup
+3. Project Initialization Prompts
+Use the following prompts sequentially with your AI coding assistant (Cursor, Copilot, or Claude) to scaffold the project.
+PROMPT 3.1 — Project Scaffold
+Prompt: Initial Project Setup
+Create a new Expo managed workflow project using the following configuration:
+- Project name: SmartSpendAI
+- SDK: Expo 51, React Native 0.74, TypeScript strict mode
+- Navigation: expo-router v3 with file-system routing
+- Folder structure:
+/app         - expo-router screens (tabs, stacks)
+/modules     - feature modules (receipt, expense, nutrition, health, translate)
+/components  - reusable UI components
+/store       - Zustand stores (useExpenseStore, useNutritionStore, useHealthStore, useAppStore)
+/db          - Drizzle ORM schema, migrations, seed data
+/services    - API clients (claude.service.ts, translate.service.ts, nutrition.service.ts)
+/hooks       - custom React hooks
+/utils       - helper functions (ocr-parser, currency, date, units)
+/constants   - theme, colors, nutrient RDA values
+/assets      - fonts, icons, lottie animations
+/types       - shared TypeScript interfaces
+Install all packages from the dependency list provided. Configure tsconfig.json with strict mode, path aliases (@/), and module resolution. Set up ESLint + Prettier with react-native config. Initialize git repository with .gitignore for Expo.
+PROMPT 3.2 — Theme & Design Tokens
+Prompt: Design System Configuration
+Create a comprehensive design system in /constants/theme.ts with the following:
+COLOR PALETTE:
+- Primary: #1A56DB (main blue), shades: 50-900 scale
+- Secondary: #7C3AED (purple accent)
+- Success: #10B981, Warning: #F59E0B, Danger: #EF4444
+- Neutrals: full gray scale from #F9FAFB to #111827
+- Background: #FAFAFA (light), #111827 (dark)
+TYPOGRAPHY:
+- Font family: Inter (loaded via expo-font)
+- Scale: xs(11), sm(13), base(15), lg(17), xl(20), 2xl(24), 3xl(30), 4xl(36)
+- Weights: 400, 500, 600, 700, 800
+SPACING: 4px base unit, scale: 1(4), 2(8), 3(12), 4(16), 5(20), 6(24), 8(32), 10(40), 12(48), 16(64)
+RADIUS: sm(6), md(12), lg(16), xl(24), full(9999)
+SHADOWS: 4 elevation levels for cards and modals
+DARK MODE: full mapping of all semantic colors
+Export as typed constants and a useTheme() hook that respects system preference and user override.
+4. Database Schema & Local Storage
+PROMPT 4.1 — Complete Database Schema
+Prompt: Drizzle ORM Schema Definition
+Create the complete Drizzle ORM schema in /db/schema.ts for SQLite with the following tables:
+TABLE: users
+- id: text PRIMARY KEY (uuid)
+- name, email, avatar_uri: text
+- weight_kg, height_cm: real
+- age: integer
+- gender: text (enum: male/female/other)
+- activity_level: text (enum: sedentary/light/moderate/active/very_active)
+- health_goals: text (JSON array: weight_loss/muscle_gain/maintenance)
+- created_at, updated_at: integer (unix timestamp)
+TABLE: receipts
+- id: text PRIMARY KEY
+- image_uri: text (local file path)
+- raw_ocr_text: text
+- store_name, store_address: text
+- currency: text (ISO 4217 default USD)
+- total_amount: real
+- detected_language: text (BCP-47 code)
+- scan_date: integer
+- created_at: integer
+TABLE: expense_items
+- id: text PRIMARY KEY
+- receipt_id: text REFERENCES receipts(id)
+- name: text NOT NULL
+- name_translated: text (English translation if foreign)
+- category: text (enum: grocery/household/pharmacy/restaurant/personal_care/electronics/clothing/other)
+- subcategory: text
+- quantity: real DEFAULT 1
+- unit: text (kg/g/lb/oz/L/ml/pcs/pack)
+- unit_price: real
+- total_price: real
+- currency: text
+- purchase_date: integer
+- expiry_date: integer (nullable)
+- brand: text
+- barcode: text
+- tags: text (JSON array)
+- notes: text
+- created_at: integer
+TABLE: nutrition_profiles
+- id: text PRIMARY KEY
+- expense_item_id: text REFERENCES expense_items(id)
+- source: text (enum: label_scan/ai_inferred/barcode_api/manual)
+- serving_size_g: real
+- servings_per_container: real
+- calories: real
+- protein_g, carbs_g, fat_g, fiber_g, sugar_g: real
+- saturated_fat_g, trans_fat_g, unsaturated_fat_g: real
+- sodium_mg, potassium_mg, calcium_mg, iron_mg, magnesium_mg: real
+- vitamin_a_mcg, vitamin_c_mg, vitamin_d_mcg, vitamin_e_mg, vitamin_k_mcg: real
+- vitamin_b1_mg, vitamin_b2_mg, vitamin_b3_mg, vitamin_b6_mg, vitamin_b12_mcg: real
+- folate_mcg, zinc_mg, selenium_mcg: real
+- cholesterol_mg: real
+- ai_confidence_score: real (0-1 for AI inferred entries)
+- raw_label_text: text
+- created_at: integer
+TABLE: daily_nutrition_logs
+- id: text PRIMARY KEY
+- user_id: text REFERENCES users(id)
+- log_date: integer (unix date)
+- expense_item_id: text REFERENCES expense_items(id)
+- consumed_servings: real DEFAULT 1
+- (all nutrient columns repeated scaled to consumed_servings)
+- created_at: integer
+TABLE: health_alerts
+- id: text PRIMARY KEY
+- user_id: text REFERENCES users(id)
+- alert_type: text (enum: deficiency/excess/goal_reached/expiry_warning)
+- nutrient_key: text
+- current_value: real
+- target_value: real
+- severity: text (enum: low/medium/high/critical)
+- message: text
+- message_translated: text
+- is_read: integer (0/1)
+- triggered_at: integer
+TABLE: categories (custom user categories)
+- id, name, icon, color, parent_id, user_id
+Create indexes on: expense_items(purchase_date, category), daily_nutrition_logs(log_date, user_id), health_alerts(user_id, is_read).
+Write the full Drizzle migration with drizzle-kit generate.
+PROMPT 4.2 — Data Access Layer
+Prompt: Repository Pattern & DAL
+Create a data access layer in /db/repositories/ with the following typed repository classes:
+- ExpenseRepository: CRUD for receipts and items, paginated queries (cursor-based), full-text search on item names, filter by date range/category/price range, bulk insert from OCR results.
+- NutritionRepository: upsert nutrition profiles, get nutrition by item, aggregate nutrition by date range (SQL sum/avg queries).
+- HealthRepository: log daily consumption, compute rolling averages, get alerts sorted by severity.
+- UserRepository: get/update user profile.
+Each repository must: use Drizzle query builder (no raw SQL unless necessary), return typed DTOs, handle SQLite WAL mode for concurrent reads, implement optimistic locking for updates, export React Query compatible query key factories.
+5. Camera & OCR Receipt Scanning
+PROMPT 5.1 — Camera Screen
+Prompt: Receipt Camera UI
+Create the receipt scanning camera screen at /app/(tabs)/scan/receipt.tsx with the following requirements:
+UI DESIGN:
+- Full-screen camera preview using react-native-vision-camera
+- Animated corner brackets (Reanimated) that pulse when document is detected
+- Top toolbar: flash toggle (auto/on/off), gallery import button, close button
+- Bottom panel (glassmorphism style with expo-blur): large circular capture button with Lottie ripple animation, hint text, recent scans strip (horizontal scroll of last 3 receipt thumbnails)
+- Real-time document edge detection overlay using ML Kit Document Scanner
+- Auto-capture mode toggle: scans automatically when document is perfectly framed
+- Quality indicator bar: shows sharpness score in real-time
+CAPTURE FLOW:
+1. User aims camera at receipt
+2. Frame processor detects document edges (react-native-vision-camera frame processor plugin)
+3. Green overlay appears when good alignment is detected
+4. Capture triggers haptic feedback (expo-haptics)
+5. Image saved to expo-file-system /receipts/{uuid}.jpg
+6. Navigate to /app/(tabs)/scan/processing with image URI
+IMAGE PRE-PROCESSING in /utils/image-processor.ts:
+- Convert to grayscale and increase contrast (expo-image-manipulator)
+- Deskew and perspective correction
+- Sharpen edges
+- Resize to max 2048px maintaining aspect ratio
+- Export as JPEG quality 85
+PROMPT 5.2 — OCR Processing Engine
+Prompt: OCR Pipeline & Parser
+Create the OCR processing module at /modules/receipt/ocr-engine.ts:
+STAGE 1 — OCR EXTRACTION:
+- Primary: ML Kit Text Recognition (on-device, fast)
+- Fallback: Tesseract.js with receipt-optimized config
+- Extract: raw text blocks with bounding box coordinates and confidence scores
+STAGE 2 — TEXT PARSER /modules/receipt/receipt-parser.ts:
+Create a rule-based + regex parser that extracts:
+- Store name: first 1-3 lines heuristic + known store name database
+- Date: regex patterns for DD/MM/YYYY, MM-DD-YYYY, "Jan 15 2025", etc.
+- Line items: pattern matching for "ITEM NAME ... PRICE" rows
+- Handle tab-separated, space-padded, and free-form formats
+- Quantity patterns: "2x", "2 @", "2 * $3.99"
+- Weight-based: "0.450 kg @ $5.99/kg"
+- Subtotal, tax lines, total amount
+- Currency symbol detection
+STAGE 3 — STRUCTURED OUTPUT:
+Map parsed items to ParsedReceipt interface:
+{
+storeName: string
+date: Date
+currency: CurrencyCode
+detectedLanguage: string
+items: Array<{ rawName: string, quantity: number, unitPrice: number, totalPrice: number }>
+subtotal: number, tax: number, total: number
+confidence: number (0-1)
+}
+STAGE 4 — VALIDATION:
+- Use Zod schema to validate all extracted fields
+- Flag items with confidence < 0.7 for manual review
+- Cross-check: sum of items should approximate total (within 5% tolerance)
+Create a Processing screen /app/(tabs)/scan/processing.tsx showing:
+- Animated scanner line over receipt image preview
+- Step-by-step progress: "Enhancing image..." "Reading text..." "Parsing items..." "Validating..."
+- On complete, navigate to review screen with extracted data
+PROMPT 5.3 — Receipt Review & Edit Screen
+Prompt: Receipt Review UI
+Create /app/(tabs)/scan/review.tsx — the post-OCR review and correction screen:
+LAYOUT: Split-view or scrollable with two sections:
+TOP: Original receipt image (zoomable via react-native-gesture-handler PinchGestureHandler) with tappable item highlights
+BOTTOM: Editable item list
+ITEM EDITING:
+- Each extracted item is shown as an editable card with: item name (editable TextInput with auto-suggest from item history), quantity picker (stepper), unit selector (dropdown), price input (currency-formatted), category picker (icon grid with 10 categories), expiry date (optional DatePicker via @react-native-community/datetimepicker)
+- Swipe left to delete item, swipe right to duplicate
+- "Add item manually" FAB
+- Items with low OCR confidence are highlighted in amber with an edit icon
+REVIEW HEADER:
+- Extracted store name (editable), date picker, currency selector, total display
+- Language detection banner: "Detected: French" with translate button
+SAVE ACTION:
+- "Save Receipt" button triggers bulk insert via ExpenseRepository
+- Show save animation, then navigate to /app/(tabs)/expenses with success toast
+- Schedule expiry notifications for items with expiry date
+6. Expense Management Module
+PROMPT 6.1 — Expense List Screen
+Prompt: Main Expense Dashboard
+Create the main expense list screen at /app/(tabs)/expenses/index.tsx:
+HEADER SECTION:
+- Month/year selector with swipe navigation (Reanimated carousel)
+- Summary cards (horizontal scroll): Total Spent, Avg Daily, Biggest Category, Items Count — each with a sparkline chart (react-native-gifted-charts LineChart mini)
+- Search bar with real-time filtering and voice search icon
+FILTER BAR (sticky, collapsible):
+- Category filter chips (horizontal scroll)
+- Date range quick filters: Today, This Week, This Month, Custom Range
+- Price range slider (react-native-paper Slider)
+- Sort: Date, Price, Name, Category
+LIST:
+- Grouped by date (sticky section headers with day total)
+- Each item card shows: category color icon, item name + brand, store name, quantity + unit, price (right-aligned), expiry badge (if within 7 days: amber; expired: red)
+- Swipe left: Delete (with undo snackbar), Edit
+- Swipe right: "Log Consumption" (adds to daily nutrition log), "Mark Eaten"
+- Tap to open item detail sheet (bottom sheet via @gorhom/bottom-sheet)
+- Support for 10,000+ items with FlashList (@shopify/flash-list) for virtualized rendering
+ITEM DETAIL BOTTOM SHEET:
+- Full item details with edit capability
+- Linked nutrition profile preview (macros ring chart)
+- Purchase history for same item (repeat buys graph)
+- "Scan Nutrition Label" shortcut button
+- "Get AI Nutrition Estimate" button
+PROMPT 6.2 — Category Analytics Screen
+Prompt: Category Breakdown & Budgets
+Create /app/(tabs)/expenses/analytics.tsx:
+TOP: Animated donut chart (react-native-gifted-charts PieChart) showing spend by category with center total. Tapping a slice drills into that category.
+BUDGET MANAGEMENT:
+- Monthly budget cards per category: progress bar with spent/budget, color: green <70%, amber 70-90%, red >90%
+- Swipe to set/edit budget inline
+- Budget alerts integration with expo-notifications
+TREND CHART:
+- 30-day area chart (react-native-gifted-charts AreaChart) of daily spend
+- Overlay with 7-day moving average line
+- Pinch to zoom, pan to explore history
+INSIGHTS PANEL (AI-generated):
+- Call Claude API with last 30 days spending data
+- Display 3 spending insights: e.g. "You spend 40% more on weekends", "Grocery spend up 15% vs last month"
+- Refresh with pull-to-refresh
+EXPORT:
+- Export to CSV (expo-file-system + expo-sharing) — full item list with all fields
+- Export to PDF summary (react-native-html-to-pdf)
+7. Nutrition Label Scanning & AI Inference
+PROMPT 7.1 — Nutrition Label OCR
+Prompt: Nutrition Label Scanner
+Create /modules/nutrition/label-scanner.ts and the UI at /app/(tabs)/scan/nutrition.tsx:
+CAMERA SCREEN SPECIFICS:
+- Use a narrower aspect ratio crop guide (tall rectangle) sized for nutrition panels
+- Real-time feedback: "Move closer", "Hold steady", "Good position" based on text density detection
+- Auto-capture when nutrition keywords detected ("Nutrition Facts", "Calories", "Serving Size")
+NUTRITION PARSER /modules/nutrition/label-parser.ts:
+Create an intelligent parser for FDA Nutrition Facts panels AND international formats (EU, UK, AU/NZ, Canadian bilingual):
+Extraction targets with regex + heuristics:
+- Serving size: "1 cup (240ml)", "2 tbsp (30g)", "1 bar (45g)"
+- Servings per container: exact number or "About 2.5"
+- Calories and Calories from Fat (legacy)
+- Total Fat → Saturated Fat, Trans Fat, Polyunsaturated, Monounsaturated
+- Cholesterol, Sodium, Total Carbohydrate → Dietary Fiber, Total Sugars → Added Sugars
+- Protein
+- Vitamin D, Calcium, Iron, Potassium (+ % Daily Value)
+- Any additional vitamins with values and %DV
+NORMALIZATION:
+- Convert all units to a standard (g, mg, mcg, IU)
+- Calculate per-100g values for database storage
+- Map %DV back to absolute values using FDA reference
+VALIDATION:
+- Cross-validate: Calories ≈ (fat_g × 9) + (protein_g × 4) + (carbs_g × 4) ± 15%
+- Flag suspicious values (e.g., protein > 100g per serving)
+- Confidence score per field based on OCR confidence × format match quality
+PROMPT 7.2 — AI Nutrition Inference
+Prompt: Claude AI Nutrition Estimation Service
+Create /services/ai-nutrition.service.ts using the Anthropic SDK:
+TRIGGER CONDITIONS: Use AI inference when:
+1. No nutrition label found on item
+2. Label scan confidence < 0.75
+3. User manually requests AI estimate
+4. Item is a fresh produce, bulk item, or restaurant item
+IMPLEMENTATION:
+async function inferNutritionFromText(item: {
+name: string, brand?: string, category: string,
+weight_g?: number, ingredients?: string, rawOcrText?: string
+}): Promise<AIInferredNutrition>
+PROMPT ENGINEERING (send to Claude claude-sonnet-4-6):
+System: You are a professional nutritionist and food scientist. Return ONLY valid JSON.
+User: "Estimate detailed nutritional information for the following food item scanned from a shopping receipt. Provide per-100g values and per-serving values.
+Item: {name}, Brand: {brand}, Category: {category}
+Ingredients (if available): {ingredients}
+Return JSON with this exact schema: { serving_size_g, servings_per_package, per_100g: { calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg, ... all nutrients }, per_serving: { same fields }, confidence: 0-1, notes: string }"
+POST-PROCESSING:
+- Parse and validate response with Zod schema
+- If confidence < 0.5, flag with UI warning "Low confidence AI estimate"
+- Store source as "ai_inferred" with confidence score
+- Cache identical item lookups in AsyncStorage (30-day TTL)
+UI in /app/(tabs)/expenses/[id]/nutrition.tsx:
+- Show AI inference spinner with "Consulting AI nutritionist..." message
+- Display results with confidence indicator
+- Allow user to manually correct any field
+- "Re-analyze" button for fresh lookup
+8. Nutrition Analytics Dashboard
+PROMPT 8.1 — Daily Nutrition View
+Prompt: Daily Nutrition Dashboard Screen
+Create /app/(tabs)/nutrition/daily.tsx:
+DATE NAVIGATION:
+- Swipeable day selector with week strip (7 days visible, scroll for more history)
+- Animated transition between days
+- "Today" quick-jump button
+MACRO OVERVIEW CARD:
+- Animated ring chart showing Protein / Carbs / Fat distribution (react-native-gifted-charts)
+- Calorie progress bar: consumed vs target (from health profile)
+- Color coding: green if within range, amber if 10% over/under, red if 20%+ off
+NUTRIENT GRID:
+- 3-column grid of nutrient cards, each showing:
+- Nutrient name + icon
+- Progress bar (filled amount vs RDA target)
+- Value + unit + % of daily target
+- Color: green/amber/red based on target
+- Nutrients: all 20+ tracked (macros + vitamins + minerals)
+- "Show more" expandable for micronutrients
+FOOD LOG LIST:
+- Items consumed today (linked to expense items)
+- Each entry: food name, serving size, calorie count, time logged
+- Tap to edit servings
+- "+ Log Food" opens searchable food selector from purchase history
+PROMPT 8.2 — Weekly & Monthly Analytics
+Prompt: Trend Analytics & Averages Screen
+Create /app/(tabs)/nutrition/trends.tsx:
+PERIOD SELECTOR: Toggle between Week / Month / 3-Month / Year views
+AVERAGE NUTRITION SUMMARY:
+- SQL query: AVG of all nutrients over period from daily_nutrition_logs
+- Display as: comparison table (period avg vs RDA target) with color-coded delta column
+- Highlight the 3 best and 3 worst performing nutrients
+TREND CHARTS (react-native-gifted-charts):
+- Calories trend: area chart with RDA target line
+- Macros trend: stacked bar chart (protein/carbs/fat stacks per day)
+- Micronutrient trends: line chart with multi-line toggle (select up to 4 nutrients)
+- All charts: pinch to zoom, pan, tap for value tooltip
+PATTERN INSIGHTS (pre-computed):
+- Day-of-week averages: "You consume more calories on Saturdays"
+- Category correlation: "Purchases from Bakery category spike sugar intake by 30%"
+- Trend direction: "Protein intake improving — up 8% this week"
+EXPORT REPORT:
+- Generate PDF nutrition report for period (react-native-html-to-pdf)
+- Include all charts, averages, and AI summary paragraph
+- Share via expo-sharing
+9. Health Profile & Smart Alerts
+PROMPT 9.1 — Health Profile Setup
+Prompt: Health Onboarding & Profile Screen
+Create /app/onboarding/ (multi-step) and /app/(tabs)/profile/health.tsx:
+ONBOARDING STEPS (animated page transitions):
+Step 1 — Personal: Name, age, gender (icon selector), profile photo (expo-image-picker)
+Step 2 — Body Metrics: Weight (kg/lb toggle), Height (cm/ft-in toggle), animated body silhouette that updates proportionally with BMI indicator
+Step 3 — Activity Level: 5 options with illustrated cards (Sedentary, Lightly Active, Moderately Active, Very Active, Athlete)
+Step 4 — Health Goals: Multi-select cards (Lose Weight, Gain Muscle, Maintain Weight, Improve Energy, Better Nutrition)
+Step 5 — Dietary Restrictions: allergens + dietary styles (Vegan, Vegetarian, Gluten-Free, Dairy-Free, Keto, etc.)
+CALCULATIONS /utils/health-calculator.ts:
+- BMR: Mifflin-St Jeor equation (most accurate)
+Male: BMR = 10×weight(kg) + 6.25×height(cm) - 5×age + 5
+Female: BMR = 10×weight(kg) + 6.25×height(cm) - 5×age - 161
+- TDEE: BMR × activity multiplier (1.2 / 1.375 / 1.55 / 1.725 / 1.9)
+- Macro targets: protein 0.8-2.2g/kg based on goal, carbs fill remaining calories, fat 20-35%
+- Micronutrient RDAs: use WHO/NIH reference values by age/gender stored in /constants/rda-values.ts
+- BMI, BMI category, ideal weight range
+HEALTH DASHBOARD:
+- Animated BMI gauge (Skia custom component)
+- Calorie target ring with TDEE vs consumed
+- Macros target table
+- Recent trend: weight log (manual entry), BMI history chart
+PROMPT 9.2 — Alert Engine
+Prompt: Smart Health Alert System
+Create /modules/health/alert-engine.ts — runs daily and on each nutrition log update:
+ALERT TYPES AND TRIGGERS:
+1. NUTRIENT DEFICIENCY ALERT:
+Trigger: 7-day rolling average of a nutrient < 70% of user's RDA
+Severity levels: 70-80% = low, 50-70% = medium, <50% = high/critical
+Nutrients monitored: all 20+ tracked nutrients
+2. NUTRIENT EXCESS ALERT:
+Trigger: 7-day rolling average > 150% of upper tolerable limit
+Priority alerts: Sodium >2300mg/day, Sugar >50g/day, Saturated Fat >20g/day, Trans Fat >0g
+3. CALORIE IMBALANCE:
+Trigger: calories consistently (5 days) < 80% or > 120% of TDEE
+4. EXPIRY WARNING:
+Trigger: items expiring within 3 days or already expired
+5. SPENDING ALERT:
+Trigger: category budget exceeded 90% before month end
+NOTIFICATION SYSTEM:
+- Schedule expo-notifications local notifications
+- Rich notifications with: nutrient name, current level, target, "View Details" action button
+- Notification grouping by severity
+- Daily summary notification at 8pm: "Today's nutrition score: 82/100, 2 alerts"
+ALERT UI /app/(tabs)/alerts/index.tsx:
+- Alert cards sorted by severity (critical → high → medium → low)
+- Each card: severity icon + color, nutrient name, "Current: X vs Target: Y", "View Food Sources" button
+- Swipe to dismiss (marks as read in DB)
+- Filter by type (nutrition/expiry/budget)
+- "View nutrition source foods" — taps through to filtered expense list
+10. Language Detection & Translation
+PROMPT 10.1 — Language Detection & Auto-Translation
+Prompt: Multi-Language Support System
+Create /modules/translate/translation.service.ts:
+LANGUAGE DETECTION:
+- Use ML Kit Language Identification on raw OCR text
+- Returns: detected language (BCP-47 code), confidence score, alternative languages
+- Store detected_language on receipt and expense_item records
+- Display flag emoji + language name in receipt review screen
+TRANSLATION PIPELINE:
+Priority: On-device ML Kit Translate (private, offline) → Google Translate API (fallback for uncommon languages)
+Translatable fields per expense item:
+- item name (raw) → item name (English)
+- store name
+- category inference from translated name
+- nutrition label text (before parsing)
+/modules/translate/language-detector.ts:
+async function detectAndTranslate(text: string, targetLocale: string): Promise<{
+detectedLanguage: BCP47Code,
+confidence: number,
+translatedText: string,
+translationSource: "on-device" | "api"
+}>
+MODEL MANAGEMENT (for ML Kit on-device):
+- Auto-download language models for detected languages
+- Store downloaded model list in AsyncStorage
+- Show download progress in settings screen
+- Support: English, Spanish, French, German, Japanese, Chinese (Simplified), Arabic, Portuguese, Hindi, Korean, Italian, Dutch + 30 more
+APP INTERNATIONALIZATION (i18next):
+- Support 10 app UI languages: en, es, fr, de, ja, zh, ar, pt, hi, ko
+- RTL layout support for Arabic
+- All strings externalized to /locales/{lang}/translation.json
+- Dates, currencies, and numbers formatted per locale using Intl API
+- Language auto-detection from device locale with manual override in Settings
+SETTINGS SCREEN /app/(tabs)/profile/language.tsx:
+- Current app language selector
+- Downloaded translation models manager
+- "Translate all receipt items" bulk action for existing receipts
+- Default target language for translation
+11. UI/UX Design System
+PROMPT 11.1 — Navigation & Layout
+Prompt: App Navigation Architecture
+Create the navigation structure using expo-router v3:
+FILE STRUCTURE:
+/app
+_layout.tsx                  — Root layout (fonts, theme provider, Zustand hydration)
+index.tsx                    — Splash/redirect
+onboarding/                  — Onboarding flow (hidden from tab bar)
+_layout.tsx
+welcome.tsx, personal.tsx, metrics.tsx, activity.tsx, goals.tsx, diet.tsx
+(tabs)/
+_layout.tsx                — Tab bar configuration
+index.tsx                  — Home dashboard
+scan/
+_layout.tsx              — Scan stack
+index.tsx                — Scan mode picker
+receipt.tsx              — Camera screen
+nutrition.tsx            — Nutrition label camera
+processing.tsx           — Processing animation
+review.tsx               — OCR review & edit
+expenses/
+index.tsx                — Expense list
+analytics.tsx            — Category charts
+[id]/
+index.tsx              — Item detail
+nutrition.tsx          — Item nutrition profile
+nutrition/
+daily.tsx                — Daily log
+trends.tsx               — Trend analytics
+alerts/
+index.tsx                — Alert list
+profile/
+index.tsx                — Profile overview
+health.tsx               — Health metrics
+language.tsx             — Language settings
+settings.tsx             — App settings
+TAB BAR DESIGN:
+- 5 tabs: Home, Scan, Expenses, Nutrition, Alerts
+- Custom tab bar (react-native-paper + Reanimated): floating pill style with blur background
+- Scan tab: extra-large circular button with gradient and camera icon (FAB style)
+- Alert tab: badge counter for unread alerts (red dot)
+- Active tab: icon scales up with spring animation + label fades in
+PROMPT 11.2 — Reusable Component Library
+Prompt: Core UI Component Set
+Create the following reusable components in /components/:
+LAYOUT COMPONENTS:
+- <Screen>: SafeAreaView wrapper with keyboard aware scroll and pull-to-refresh
+- <Card>: elevated surface with consistent border radius, shadows, press animation
+- <Section>: section container with header, optional "View All" link, and divider
+- <EmptyState>: illustration + title + description + optional CTA button (Lottie animation)
+- <SkeletonLoader>: animated placeholder for loading states (Shimmer effect via Reanimated)
+DATA DISPLAY:
+- <NutrientBar>: labeled progress bar with value and % DV, color-coded by status
+- <MacroRing>: animated donut chart (Skia) for protein/carbs/fat
+- <PriceTag>: formatted currency display with locale support
+- <CategoryChip>: icon + label chip with category color
+- <ExpiryBadge>: days until expiry with traffic light colors
+- <ConfidencePill>: "AI Estimated" / "Label Scanned" badge with confidence %
+INPUTS:
+- <CurrencyInput>: masked numeric input with currency formatting
+- <DatePickerField>: unified date picker (platform-adaptive)
+- <SearchBar>: animated search with filter chip row
+- <QuantitySelector>: stepper with unit dropdown
+FEEDBACK:
+- <Toast>: animated success/error/info toasts with auto-dismiss
+- <AlertBanner>: inline warning banners with icon and action
+- <ScanResultOverlay>: full-screen success overlay with item count and save animation
+- <LoadingOverlay>: full-screen spinner with descriptive message and progress steps
+PROMPT 11.3 — Home Dashboard
+Prompt: Home Screen Design
+Create /app/(tabs)/index.tsx — the main home dashboard:
+HEADER:
+- Greeting: "Good morning, [Name]" with current date
+- Streak indicator: consecutive days of logging (flame icon + count)
+- Notification bell with unread count
+QUICK STATS ROW (horizontal scroll cards):
+- Today's Calories: ring chart + consumed/target text
+- Today's Spend: amount + vs yesterday delta
+- Alerts: count of active alerts by severity
+- Streak: current logging streak
+SCAN SHORTCUT BUTTONS: 2 large colorful buttons — "Scan Receipt" and "Scan Nutrition Label"
+RECENT RECEIPTS: Last 3 receipts as horizontal scroll cards with store name, date, item count, total amount, and thumbnail
+NUTRITION HIGHLIGHTS: Horizontal scroll of the 4 most-deficient nutrients with progress bars and "View Details" tap
+TODAY'S FOOD LOG: Preview of logged items with quick-add button
+MOTIVATIONAL AI INSIGHT: Single-sentence daily tip from Claude API based on recent nutrition data (cached, refreshed every 24h)
+All sections use skeleton loading, pull-to-refresh updates everything, smooth scroll with scroll-aware header (collapses on scroll down, expands on scroll up via Reanimated interpolation).
+12. Testing, Performance & Deployment
+PROMPT 12.1 — Testing Strategy
+Prompt: Test Suite Implementation
+Set up the complete testing infrastructure:
+UNIT TESTS (Jest + React Native Testing Library):
+- /modules/receipt/receipt-parser.test.ts: test 20+ real receipt format patterns (Walmart, Costco, Whole Foods, international)
+- /modules/nutrition/label-parser.test.ts: test FDA and international label formats
+- /utils/health-calculator.test.ts: BMR/TDEE calculations with known values
+- /db/repositories/*.test.ts: mock SQLite and test all CRUD operations
+- /modules/translate/translation.service.test.ts: mock ML Kit and test language detection
+INTEGRATION TESTS (Detox E2E):
+- Full receipt scan flow: mock camera → OCR → review → save
+- Nutrition logging flow: expense item → AI inference → log → alert check
+- Onboarding flow: complete all 6 steps → verify health calculations stored
+PERFORMANCE:
+- FlashList for all lists (replace FlatList)
+- memo() on all pure components, useMemo for expensive computations
+- SQLite query optimization: verify indexes used with EXPLAIN QUERY PLAN
+- Image caching: react-native-fast-image with LRU cache 100 items
+- React Query stale times: expenses 5min, nutrition analytics 15min, health profile 1hr
+- Background OCR processing: run in separate JS thread via react-native-worker-threads
+SECURITY:
+- Encrypt SQLite with expo-sqlite encrypted option
+- API keys stored in expo-secure-store (never in code or AsyncStorage)
+- Certificate pinning for Claude API calls
+PROMPT 12.2 — Deployment Configuration
+Prompt: EAS Build & OTA Updates
+Configure Expo Application Services (EAS) for production deployment:
+eas.json: Configure 3 build profiles:
+- development: debug build, dev client, internal distribution
+- preview: release mode, internal distribution, OTA updates enabled
+- production: optimized build, App Store + Play Store submission, CodePush OTA
+app.json configuration:
+- iOS: bundle ID com.smartspendai.app, usage descriptions for camera/photo library
+- Android: package name, camera permission, READ_EXTERNAL_STORAGE
+- expo-notifications: Android notification channel configuration
+- expo-sqlite: database name smartspend_v1.db
+OTA UPDATES with expo-updates:
+- Check for updates on app foreground
+- Background download, apply on next cold start
+- Rollback mechanism if update causes crash
+Environment variables (EAS Secrets):
+- ANTHROPIC_API_KEY
+- GOOGLE_TRANSLATE_API_KEY (for ML Kit fallback)
+- SENTRY_DSN (error monitoring with @sentry/react-native)
+CI/CD: GitHub Actions workflow:
+- On PR: run Jest tests, TypeScript check, lint
+- On merge to main: trigger EAS build preview
+- On tag v*: trigger EAS production build
+13. Master Build Sequence
+Execute the following prompts in exact order to build the complete application from scratch. Each phase builds on the previous.
+Phase
+Module
+Prompts to Execute
+Est. Time
+1
+Foundation
+3.1 → 3.2 → 2.x (install all deps) → 11.1 (navigation)
+2-3 hrs
+2
+Database
+4.1 → 4.2 → run migrations → seed test data
+1-2 hrs
+3
+Design System
+11.2 → 11.3 → verify all components render
+2-3 hrs
+4
+OCR Engine
+5.1 → 5.2 → 5.3 → test with real receipt images
+3-4 hrs
+5
+Expense Module
+6.1 → 6.2 → verify list + analytics
+2-3 hrs
+6
+Nutrition OCR
+7.1 → test with real label images
+2-3 hrs
+7
+AI Nutrition
+7.2 → integrate Claude API → test 10 items
+1-2 hrs
+8
+Health Profile
+9.1 → verify BMR/TDEE calculations
+1-2 hrs
+9
+Alert Engine
+9.2 → simulate deficiencies → verify notifications
+2-3 hrs
+10
+Analytics
+8.1 → 8.2 → verify charts with dummy data
+2-3 hrs
+11
+Translation
+10.1 → test 5 foreign language receipts
+2-3 hrs
+12
+Testing & QA
+12.1 → 12.2 → fix all test failures → EAS build
+3-4 hrs
+Critical Integration Points
+OCR→DB
+After OCR parsing, always validate with Zod schema before any DB insert. Invalid items must surface in review UI, never silently fail.
+AI→Cache
+Cache all Claude API responses keyed by item name hash. Never call Claude for the same item name twice within 30 days. Respect rate limits with exponential backoff.
+Alert→Push
+Run alert engine in a background fetch (expo-background-fetch) at midnight daily AND after every nutrition log save. De-duplicate alerts — only re-trigger if same nutrient deficiency persists 3+ days.
+Lang→OCR
+Language detection MUST happen before OCR parsing, not after. Use detected language to configure Tesseract character whitelist and ML Kit language hint for better accuracy.
+Security Checklist Before Shipping
+All API keys stored in expo-secure-store, never hardcoded
+SQLite encrypted with AES-256 via expo-sqlite encryption option
+User health data never leaves device (AI calls send only item name + category, never personal health data)
+Receipt images stored in app-private directory, not photo library
+No analytics SDKs with PII tracking
+Privacy policy and Terms of Service screens in onboarding
+— End of Document —
