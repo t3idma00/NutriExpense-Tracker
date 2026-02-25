@@ -3,10 +3,16 @@ import type { ParsedReceipt, Unit } from "@/types";
 
 const currencySymbolMap: Record<string, string> = {
   $: "USD",
-  "€": "EUR",
-  "£": "GBP",
-  "¥": "JPY",
-  "₹": "INR",
+  "EUR": "EUR",
+  "GBP": "GBP",
+  "JPY": "JPY",
+  "INR": "INR",
+  "AUD": "AUD",
+  "CAD": "CAD",
+  "â‚¬": "EUR",
+  "Â£": "GBP",
+  "Â¥": "JPY",
+  "â‚¹": "INR",
 };
 
 const lineItemPattern =
@@ -20,6 +26,7 @@ const parsedLineItemSchema = z.object({
   unitPrice: z.number().nonnegative(),
   totalPrice: z.number().nonnegative(),
   confidence: z.number().min(0).max(1),
+  confidenceBand: z.enum(["high", "medium", "low"]).optional(),
 });
 
 const parsedReceiptSchema = z.object({
@@ -36,7 +43,10 @@ const parsedReceiptSchema = z.object({
 });
 
 function detectCurrency(text: string): string {
-  const symbol = Object.keys(currencySymbolMap).find((k) => text.includes(k));
+  const upper = text.toUpperCase();
+  const symbol = Object.keys(currencySymbolMap).find(
+    (key) => text.includes(key) || upper.includes(key),
+  );
   return symbol ? currencySymbolMap[symbol] : "USD";
 }
 
@@ -65,13 +75,19 @@ function parseAmount(line: string): number | null {
   return Number.isFinite(value) ? value : null;
 }
 
+function confidenceBand(value: number): "high" | "medium" | "low" {
+  if (value >= 0.9) return "high";
+  if (value >= 0.6) return "medium";
+  return "low";
+}
+
 function extractItems(lines: string[]) {
   const items: ParsedReceipt["items"] = [];
 
   for (const line of lines) {
     const clean = line.trim();
     if (!clean) continue;
-    if (/subtotal|tax|total|change|cash|visa|master/i.test(clean)) continue;
+    if (/subtotal|tax|total|change|cash|visa|master|amex/i.test(clean)) continue;
 
     const match = clean.match(lineItemPattern);
     if (!match?.groups) continue;
@@ -81,11 +97,16 @@ function extractItems(lines: string[]) {
     if (!rawName || !Number.isFinite(price)) continue;
 
     const qtyMatch = rawName.match(qtyPattern);
-    const quantity = qtyMatch?.groups?.qty
-      ? Number(qtyMatch.groups.qty)
-      : 1;
+    const quantity = qtyMatch?.groups?.qty ? Number(qtyMatch.groups.qty) : 1;
     const unit: Unit = /kg|g|lb|oz|l|ml/i.test(rawName) ? "g" : "pcs";
     const unitPrice = quantity > 0 ? price / quantity : price;
+    const confidence = Math.min(
+      0.97,
+      0.62 +
+        (qtyMatch ? 0.1 : 0) +
+        (price > 0 ? 0.15 : 0) +
+        (rawName.length > 4 ? 0.08 : 0),
+    );
 
     items.push({
       rawName: rawName.replace(qtyPattern, "").trim(),
@@ -93,7 +114,8 @@ function extractItems(lines: string[]) {
       unit,
       unitPrice,
       totalPrice: price,
-      confidence: 0.82,
+      confidence,
+      confidenceBand: confidenceBand(confidence),
     });
   }
 

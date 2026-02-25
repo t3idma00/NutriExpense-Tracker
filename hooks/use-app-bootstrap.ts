@@ -5,6 +5,8 @@ import { useAppStore } from "@/store/app-store";
 
 export function useAppBootstrap() {
   const setCurrentUser = useAppStore((s) => s.setCurrentUser);
+  const setOnboardingCompleted = useAppStore((s) => s.setOnboardingCompleted);
+  const setPreferredLanguage = useAppStore((s) => s.setPreferredLanguage);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -15,7 +17,10 @@ export function useAppBootstrap() {
       if (!user) {
         user = await repositories.user.createDefaultUser("Smart Shopper");
       }
+      await repositories.household.ensureDefaultHouseholdForUser(user.id, user.name);
       setCurrentUser(user);
+      setOnboardingCompleted(user.onboardingCompleted);
+      setPreferredLanguage(user.preferredLanguage ?? "en");
       if (mounted) setIsReady(true);
     };
 
@@ -24,7 +29,7 @@ export function useAppBootstrap() {
     return () => {
       mounted = false;
     };
-  }, [setCurrentUser]);
+  }, [setCurrentUser, setOnboardingCompleted, setPreferredLanguage]);
 
   return { isReady };
 }

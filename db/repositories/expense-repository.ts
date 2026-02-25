@@ -19,6 +19,35 @@ export interface ExpenseRow extends ExpenseItem {
   version: number;
 }
 
+const categoryKeywordMap: Array<{ category: ExpenseCategory; keywords: string[] }> = [
+  { category: "produce", keywords: ["apple", "banana", "avocado", "spinach", "tomato", "onion", "lettuce"] },
+  { category: "bakery", keywords: ["bread", "bun", "cake", "cookie", "croissant", "muffin"] },
+  { category: "pharmacy", keywords: ["vitamin", "tablet", "capsule", "medicine", "bandage", "syrup"] },
+  { category: "household", keywords: ["detergent", "soap", "cleaner", "tissue", "trash", "foil"] },
+  { category: "restaurant", keywords: ["burger", "pizza", "meal", "combo", "fries", "delivery"] },
+  { category: "personal_care", keywords: ["shampoo", "conditioner", "toothpaste", "lotion", "deodorant"] },
+  { category: "electronics", keywords: ["charger", "battery", "adapter", "cable", "headphones"] },
+  { category: "clothing", keywords: ["shirt", "pants", "jacket", "sock", "shoe"] },
+];
+
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function inferCategoryByKeywords(name: string): ExpenseCategory {
+  const normalized = normalizeName(name);
+  for (const mapping of categoryKeywordMap) {
+    if (mapping.keywords.some((token) => normalized.includes(token))) {
+      return mapping.category;
+    }
+  }
+  return "grocery";
+}
+
 function mapExpenseRow(row: Record<string, unknown>): ExpenseRow {
   return {
     id: String(row.id),
@@ -46,6 +75,32 @@ function mapExpenseRow(row: Record<string, unknown>): ExpenseRow {
 }
 
 export class ExpenseRepository {
+  private async resolveCategoryFromMemory(name: string): Promise<ExpenseCategory> {
+    const db = await getDb();
+    const normalized = normalizeName(name);
+    const row = await db.getFirstAsync<Record<string, unknown>>(
+      "SELECT category FROM item_category_memory WHERE normalized_name = ? LIMIT 1",
+      [normalized],
+    );
+    return row?.category ? (String(row.category) as ExpenseCategory) : inferCategoryByKeywords(name);
+  }
+
+  private async rememberCategory(name: string, category: ExpenseCategory): Promise<void> {
+    const db = await getDb();
+    const normalized = normalizeName(name);
+    await db.runAsync(
+      `INSERT INTO item_category_memory (normalized_name, category, confidence, use_count, last_seen_at)
+       VALUES (?, ?, ?, 1, ?)
+       ON CONFLICT(normalized_name)
+       DO UPDATE SET
+         category = excluded.category,
+         confidence = MIN(1, item_category_memory.confidence + 0.05),
+         use_count = item_category_memory.use_count + 1,
+         last_seen_at = excluded.last_seen_at`,
+      [normalized, category, 0.75, Date.now()],
+    );
+  }
+
   async createReceiptWithItems(input: {
     parsed: ParsedReceipt;
     imageUri: string;
@@ -66,20 +121,22 @@ export class ExpenseRepository {
       createdAt: now,
     };
 
-    const items: ExpenseItem[] = input.parsed.items.map((item) => ({
-      id: createId(),
-      receiptId: receipt.id,
-      name: item.rawName,
-      category: "grocery",
-      quantity: item.quantity,
-      unit: item.unit,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
-      currency: input.parsed.currency,
-      purchaseDate: input.parsed.date,
-      tags: [],
-      createdAt: now,
-    }));
+    const items: ExpenseItem[] = await Promise.all(
+      input.parsed.items.map(async (item) => ({
+        id: createId(),
+        receiptId: receipt.id,
+        name: item.rawName,
+        category: await this.resolveCategoryFromMemory(item.rawName),
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        currency: input.parsed.currency,
+        purchaseDate: input.parsed.date,
+        tags: [],
+        createdAt: now,
+      })),
+    );
 
     await db.withTransactionAsync(async () => {
       await db.runAsync(
@@ -129,6 +186,8 @@ export class ExpenseRepository {
             item.createdAt,
           ],
         );
+
+        await this.rememberCategory(item.name, item.category);
       }
     });
 
@@ -209,6 +268,9 @@ export class ExpenseRepository {
     patch: Partial<ExpenseItem>,
   ): Promise<boolean> {
     const db = await getDb();
+    const current = await this.getItemById(id);
+    if (!current) return false;
+
     const result = await db.runAsync(
       `UPDATE expense_items
        SET
@@ -235,7 +297,15 @@ export class ExpenseRepository {
         currentVersion,
       ],
     );
-    return (result.changes ?? 0) > 0;
+
+    const changed = (result.changes ?? 0) > 0;
+    if (!changed) return false;
+
+    if (patch.category) {
+      await this.rememberCategory(patch.name ?? current.name, patch.category);
+    }
+
+    return true;
   }
 
   async deleteItem(id: string): Promise<void> {

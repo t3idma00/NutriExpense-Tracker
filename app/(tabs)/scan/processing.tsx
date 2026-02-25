@@ -9,7 +9,8 @@ import { useScanStore } from "@/store/scan-store";
 
 const progressSteps = [
   "Enhancing image...",
-  "Reading text...",
+  "Reading text (primary OCR)...",
+  "Reading text (fallback OCR)...",
   "Parsing items...",
   "Validating totals...",
 ] as const;
@@ -18,6 +19,7 @@ export default function ProcessingScreen() {
   const imageUri = useScanStore((s) => s.receiptImageUri);
   const rawTextOverride = useScanStore((s) => s.rawTextOverride);
   const setParsedReceipt = useScanStore((s) => s.setParsedReceipt);
+  const setOcrMeta = useScanStore((s) => s.setOcrMeta);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string>();
 
@@ -36,13 +38,17 @@ export default function ProcessingScreen() {
         setStep(1);
 
         await new Promise((resolve) => setTimeout(resolve, 450));
+        setStep(2);
         const result = await runReceiptOcrPipeline({
           imageUri: processedUri,
           rawTextOverride,
         });
         if (cancelled) return;
         setStep(3);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        setStep(4);
         setParsedReceipt(result.parsed);
+        setOcrMeta(result.ocrMeta);
         setTimeout(() => router.replace("/(tabs)/scan/review"), 500);
       } catch (entry) {
         if (cancelled) return;
@@ -55,7 +61,7 @@ export default function ProcessingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [imageUri, rawTextOverride, setParsedReceipt]);
+  }, [imageUri, rawTextOverride, setParsedReceipt, setOcrMeta]);
 
   return (
     <Screen scroll={false} style={{ justifyContent: "center", gap: 16 }}>

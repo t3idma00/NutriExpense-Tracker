@@ -63,8 +63,11 @@ export default function AlertsScreen() {
 
       {!filtered.length ? (
         <Card>
-          <Card.Content>
-            <Text style={{ color: "#6B7280" }}>No alerts right now.</Text>
+          <Card.Content style={{ gap: 8 }}>
+            <Text style={{ fontSize: 22 }}>All clear</Text>
+            <Text style={{ color: "#6B7280" }}>
+              No alerts right now. Your current nutrition and expiry signals look stable.
+            </Text>
           </Card.Content>
         </Card>
       ) : null}

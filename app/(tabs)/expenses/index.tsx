@@ -141,10 +141,22 @@ export default function ExpensesScreen() {
 
       {!sectioned.length ? (
         <Card>
-          <Card.Content>
+          <Card.Content style={{ gap: 10 }}>
+            {[
+              "Organic Bananas  x2      $3.50",
+              "Greek Yogurt      x1      $4.99",
+              "Chicken Breast    x1      $12.49",
+            ].map((line) => (
+              <Text key={line} style={{ color: "#9CA3AF", opacity: 0.5 }}>
+                {line}
+              </Text>
+            ))}
             <Text style={{ color: "#6B7280" }}>
-              No expenses found. Scan a receipt to get started.
+              Scan your first receipt to unlock spend timeline and category insights.
             </Text>
+            <Button mode="contained" onPress={() => router.push("/(tabs)/scan/receipt")}>
+              Scan Your First Receipt
+            </Button>
           </Card.Content>
         </Card>
       ) : null}

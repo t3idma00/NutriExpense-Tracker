@@ -14,4 +14,8 @@ export const queryKeys = {
   alerts: {
     all: (userId?: string) => ["alerts", userId] as const,
   },
+  household: {
+    profile: (userId?: string) => ["household", "profile", userId] as const,
+    members: (userId?: string) => ["household", "members", userId] as const,
+  },
 };

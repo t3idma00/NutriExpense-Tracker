@@ -18,6 +18,9 @@ export default function ProfileScreen() {
       </Card>
 
       <View style={{ gap: 10 }}>
+        <Button mode="contained-tonal" onPress={() => router.push("/(tabs)/profile/family")}>
+          Family Profile
+        </Button>
         <Button mode="contained-tonal" onPress={() => router.push("/(tabs)/profile/health")}>
           Health Profile
         </Button>

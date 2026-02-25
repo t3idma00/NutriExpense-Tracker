@@ -6,6 +6,7 @@ import { useExpense } from "@/hooks/use-expenses";
 import { useNutritionProfile, useUpsertNutritionMutation } from "@/hooks/use-nutrition";
 import { parseNutritionLabel } from "@/modules/nutrition/label-parser";
 import { inferNutritionFromText } from "@/services/ai-nutrition.service";
+import { lookupNutritionByBarcode } from "@/services/barcode-nutrition.service";
 
 export default function ItemNutritionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -13,11 +14,34 @@ export default function ItemNutritionScreen() {
   const nutrition = useNutritionProfile(id ?? "");
   const upsert = useUpsertNutritionMutation();
   const [rawText, setRawText] = useState("");
+  const [barcode, setBarcode] = useState("");
   const [status, setStatus] = useState<string>();
 
   const analyze = async () => {
     const item = expense.data;
     if (!item) return;
+
+    if (barcode.trim()) {
+      const barcodeProfile = await lookupNutritionByBarcode(barcode);
+      if (barcodeProfile) {
+        await upsert.mutateAsync({
+          expenseItemId: item.id,
+          source: "barcode_api",
+          servingSizeG: barcodeProfile.servingSizeG,
+          calories: barcodeProfile.calories,
+          proteinG: barcodeProfile.proteinG,
+          carbsG: barcodeProfile.carbsG,
+          fatG: barcodeProfile.fatG,
+          fiberG: barcodeProfile.fiberG,
+          sugarG: barcodeProfile.sugarG,
+          sodiumMg: barcodeProfile.sodiumMg,
+          aiConfidenceScore: barcodeProfile.confidence,
+          rawLabelText: rawText || `Barcode: ${barcodeProfile.barcode}`,
+        });
+        setStatus("Saved from barcode nutrition lookup.");
+        return;
+      }
+    }
 
     const parsed = parseNutritionLabel(rawText);
     if (parsed.confidence >= 0.75) {
@@ -63,6 +87,14 @@ export default function ItemNutritionScreen() {
 
       <Card>
         <Card.Content style={{ gap: 10 }}>
+          <TextInput
+            label="Barcode (Optional)"
+            mode="outlined"
+            value={barcode}
+            onChangeText={setBarcode}
+            keyboardType="number-pad"
+            placeholder="Enter UPC/EAN for Open Food Facts lookup"
+          />
           <TextInput
             label="Nutrition OCR Text"
             mode="outlined"

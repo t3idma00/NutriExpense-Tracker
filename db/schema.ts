@@ -129,9 +129,57 @@ export const SCHEMA_STATEMENTS: string[] = [
     parent_id TEXT,
     user_id TEXT
   );`,
+  `CREATE TABLE IF NOT EXISTS household_profiles (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL DEFAULT 'My Household',
+    meals_per_day INTEGER NOT NULL DEFAULT 3,
+    grocery_frequency TEXT NOT NULL DEFAULT 'weekly',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS family_members (
+    id TEXT PRIMARY KEY NOT NULL,
+    household_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT,
+    age INTEGER,
+    gender TEXT,
+    weight_kg REAL,
+    height_cm REAL,
+    is_school_age INTEGER NOT NULL DEFAULT 0,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    rda_profile_key TEXT,
+    rda_targets TEXT NOT NULL DEFAULT '{}',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (household_id) REFERENCES household_profiles(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS item_category_memory (
+    normalized_name TEXT PRIMARY KEY NOT NULL,
+    category TEXT NOT NULL,
+    subcategory TEXT,
+    confidence REAL NOT NULL DEFAULT 1,
+    use_count INTEGER NOT NULL DEFAULT 1,
+    last_seen_at INTEGER NOT NULL
+  );`,
+  `CREATE TABLE IF NOT EXISTS receipt_corrections (
+    id TEXT PRIMARY KEY NOT NULL,
+    item_name_original TEXT NOT NULL,
+    item_name_corrected TEXT NOT NULL,
+    confidence_before REAL,
+    created_at INTEGER NOT NULL
+  );`,
+  `CREATE TABLE IF NOT EXISTS barcode_nutrition_cache (
+    barcode TEXT PRIMARY KEY NOT NULL,
+    payload_json TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
+  );`,
   `CREATE INDEX IF NOT EXISTS idx_expense_items_purchase_category ON expense_items (purchase_date, category);`,
   `CREATE INDEX IF NOT EXISTS idx_daily_logs_date_user ON daily_nutrition_logs (log_date, user_id);`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_user_read ON health_alerts (user_id, is_read);`,
+  `CREATE INDEX IF NOT EXISTS idx_family_members_household ON family_members (household_id);`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS expense_items_fts USING fts5(id, name, content='expense_items', content_rowid='rowid');`,
   `CREATE TRIGGER IF NOT EXISTS expense_items_ai AFTER INSERT ON expense_items BEGIN
       INSERT INTO expense_items_fts(rowid, id, name) VALUES (new.rowid, new.id, new.name);

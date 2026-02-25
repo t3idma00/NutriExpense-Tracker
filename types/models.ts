@@ -1,4 +1,11 @@
 export type Gender = "male" | "female" | "other";
+export type FamilyRole =
+  | "mother"
+  | "father"
+  | "child"
+  | "grandparent"
+  | "guardian"
+  | "other";
 export type ActivityLevel =
   | "sedentary"
   | "light"
@@ -52,6 +59,42 @@ export interface UserProfile {
   onboardingCompleted: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface HouseholdProfile {
+  id: string;
+  userId: string;
+  name: string;
+  mealsPerDay: number;
+  groceryFrequency: "daily" | "weekly" | "biweekly" | "monthly";
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FamilyMember {
+  id: string;
+  householdId: string;
+  name: string;
+  role?: FamilyRole;
+  age?: number;
+  gender?: Gender;
+  weightKg?: number;
+  heightCm?: number;
+  isSchoolAge: boolean;
+  isActive: boolean;
+  rdaProfileKey?: string;
+  rdaTargets: Partial<NutritionAggregate>;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ItemCategoryMemory {
+  normalizedName: string;
+  category: ExpenseCategory;
+  subcategory?: string;
+  confidence: number;
+  useCount: number;
+  lastSeenAt: number;
 }
 
 export interface Receipt {
@@ -164,6 +207,7 @@ export interface ParsedLineItem {
   unitPrice: number;
   totalPrice: number;
   confidence: number;
+  confidenceBand?: "high" | "medium" | "low";
 }
 
 export interface ParsedReceipt {
