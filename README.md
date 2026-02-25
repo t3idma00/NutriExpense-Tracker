@@ -17,6 +17,17 @@ npm install
 npm run start
 ```
 
+## If Expo Go Shows Red Screen (500 / babel-preset-expo)
+
+Run:
+
+```bash
+npm run repair:expo
+npm run start:clear
+```
+
+Run these as two separate steps. Start the app only after `repair:expo` finishes successfully.
+
 ## Project Structure
 
 - `app/`: Expo Router screens and navigation
