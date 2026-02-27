@@ -41,5 +41,11 @@ Run these as two separate steps. Start the app only after `repair:expo` finishes
 
 ## AI Nutrition Key
 
-Set `EXPO_PUBLIC_ANTHROPIC_API_KEY` to enable Claude-based inference.
+Set `EXPO_PUBLIC_GEMINI_API_KEY` to enable Gemini-based inference.
+Optional: set `EXPO_PUBLIC_GEMINI_MODEL` to override the default model selection.
 Without it, the app falls back to local heuristics and still works end-to-end.
+
+## Receipt OCR Key
+
+Set `EXPO_PUBLIC_OCR_SPACE_API_KEY` to enable real bill text extraction from camera images.
+Without it, the app uses the local demo fallback OCR text path.

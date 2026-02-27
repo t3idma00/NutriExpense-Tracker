@@ -4,8 +4,8 @@ import { router } from "expo-router";
 import { ActivityIndicator, Card, ProgressBar, Text } from "react-native-paper";
 import { Screen } from "@/components/layout/screen";
 import { runReceiptOcrPipeline } from "@/modules/receipt/ocr-engine";
-import { preprocessReceiptImage } from "@/utils/image-processor";
 import { useScanStore } from "@/store/scan-store";
+import { preprocessReceiptImage } from "@/utils/image-processor";
 
 const progressSteps = [
   "Enhancing image...",
@@ -65,19 +65,31 @@ export default function ProcessingScreen() {
 
   return (
     <Screen scroll={false} style={{ justifyContent: "center", gap: 16 }}>
-      <Text variant="headlineSmall">Processing Receipt</Text>
-      <Text style={{ color: "#6B7280" }}>
-        {error ? error : progressSteps[Math.min(step, progressSteps.length - 1)]}
-      </Text>
+      <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
+            Processing receipt
+          </Text>
+          <Text style={{ color: "#5B6F84" }}>
+            {error ? error : progressSteps[Math.min(step, progressSteps.length - 1)]}
+          </Text>
+        </Card.Content>
+      </Card>
+
       {imageUri ? (
-        <Image source={{ uri: imageUri }} style={{ width: "100%", height: 280, borderRadius: 16 }} />
+        <Image source={{ uri: imageUri }} style={{ width: "100%", height: 260, borderRadius: 18 }} />
       ) : null}
-      <Card>
+
+      <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
         <Card.Content style={{ gap: 10 }}>
-          <ProgressBar progress={(step + 1) / progressSteps.length} />
+          <ProgressBar
+            progress={(step + 1) / progressSteps.length}
+            color="#1F4E82"
+            style={{ height: 8, borderRadius: 999, backgroundColor: "#DEE8F4" }}
+          />
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <ActivityIndicator />
-            <Text>{progressSteps[Math.min(step, progressSteps.length - 1)]}</Text>
+            <ActivityIndicator color="#1F4E82" />
+            <Text style={{ color: "#2B425C" }}>{progressSteps[Math.min(step, progressSteps.length - 1)]}</Text>
           </View>
         </Card.Content>
       </Card>

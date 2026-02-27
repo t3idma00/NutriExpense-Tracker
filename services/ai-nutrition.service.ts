@@ -31,6 +31,15 @@ const aiResponseSchema = z.object({
 
 export type AIInferredNutrition = z.infer<typeof aiResponseSchema>;
 
+interface GeminiGenerateContentResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+    finishReason?: string;
+  }>;
+}
+
 function makeCacheKey(itemName: string): string {
   return `${CACHE_PREFIX}${itemName.toLowerCase().trim()}`;
 }
@@ -81,7 +90,10 @@ async function getCached(itemName: string): Promise<AIInferredNutrition | null> 
   const raw = await AsyncStorage.getItem(makeCacheKey(itemName));
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { expiresAt: number; payload: AIInferredNutrition };
+    const parsed = JSON.parse(raw) as {
+      expiresAt: number;
+      payload: AIInferredNutrition;
+    };
     if (Date.now() > parsed.expiresAt) {
       await AsyncStorage.removeItem(makeCacheKey(itemName));
       return null;
@@ -99,6 +111,106 @@ async function cache(itemName: string, payload: AIInferredNutrition): Promise<vo
   );
 }
 
+function extractJsonFromText(rawText: string): unknown {
+  const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] ?? rawText).trim();
+
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(candidate.slice(start, end + 1));
+    }
+    throw new Error("AI response did not contain valid JSON.");
+  }
+}
+
+async function callGeminiModel(input: {
+  model: string;
+  apiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<string> {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+    input.model,
+  )}:generateContent?key=${encodeURIComponent(input.apiKey)}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: input.systemPrompt }],
+      },
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: input.userPrompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.15,
+        maxOutputTokens: 800,
+        responseMimeType: "application/json",
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const details = await response.text();
+    throw new Error(
+      `Gemini inference failed (${input.model}): ${response.status} ${details.slice(0, 220)}`,
+    );
+  }
+
+  const json = (await response.json()) as GeminiGenerateContentResponse;
+  const text = json.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text ?? "")
+    .join("\n")
+    .trim();
+
+  if (!text) {
+    throw new Error(`Gemini inference returned empty response (${input.model}).`);
+  }
+
+  return text;
+}
+
+async function inferWithGemini(input: {
+  apiKey: string;
+  systemPrompt: string;
+  userPrompt: string;
+}): Promise<AIInferredNutrition> {
+  const modelCandidates = [
+    process.env.EXPO_PUBLIC_GEMINI_MODEL?.trim(),
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash-lite-001",
+  ].filter((value): value is string => Boolean(value));
+
+  let lastError: Error | null = null;
+  for (const model of modelCandidates) {
+    try {
+      const rawText = await callGeminiModel({
+        model,
+        apiKey: input.apiKey,
+        systemPrompt: input.systemPrompt,
+        userPrompt: input.userPrompt,
+      });
+      return aiResponseSchema.parse(extractJsonFromText(rawText));
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError ?? new Error("Gemini inference failed for all model candidates.");
+}
+
 export async function inferNutritionFromText(item: {
   name: string;
   brand?: string;
@@ -110,7 +222,7 @@ export async function inferNutritionFromText(item: {
   const cached = await getCached(item.name);
   if (cached) return cached;
 
-  const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
     const estimate = heuristicEstimate(item.name);
     const payload = aiResponseSchema.parse({
@@ -118,7 +230,7 @@ export async function inferNutritionFromText(item: {
       servings_per_package: 1,
       per_serving: estimate.per_100g,
       confidence: 0.62,
-      notes: "Offline heuristic estimate (no Anthropic API key found).",
+      notes: "Offline heuristic estimate (no Gemini API key found).",
     });
     await cache(item.name, payload);
     return payload;
@@ -132,35 +244,12 @@ Item: ${item.name}, Brand: ${item.brand ?? "unknown"}, Category: ${item.category
 Ingredients (if available): ${item.ingredients ?? "unknown"}
 Return JSON with this exact schema: { serving_size_g, servings_per_package, per_100g: { calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg }, per_serving: { calories, protein_g, carbs_g, fat_g, fiber_g, sugar_g, sodium_mg }, confidence: 0-1, notes: string }`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6",
-      max_tokens: 700,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    }),
+  const extracted = await inferWithGemini({
+    apiKey,
+    systemPrompt,
+    userPrompt,
   });
 
-  if (!response.ok) {
-    throw new Error(`AI inference failed: ${response.status}`);
-  }
-
-  const json = (await response.json()) as {
-    content?: Array<{ type: string; text?: string }>;
-  };
-
-  const rawText = json.content?.find((entry) => entry.type === "text")?.text;
-  if (!rawText) {
-    throw new Error("AI inference returned empty response.");
-  }
-
-  const extracted = aiResponseSchema.parse(JSON.parse(rawText));
   await cache(item.name, extracted);
   return extracted;
 }

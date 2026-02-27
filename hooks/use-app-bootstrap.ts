@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { initDatabase } from "@/db/database";
 import { repositories } from "@/db/repositories";
 import { useAppStore } from "@/store/app-store";
+import { buildUserTargets } from "@/utils/health-calculator";
+import {
+  recomputeConsumptionModels,
+  recomputeNutritionAnalytics,
+} from "@/services/nutrition-analytics.service";
 
 export function useAppBootstrap() {
   const setCurrentUser = useAppStore((s) => s.setCurrentUser);
@@ -21,6 +26,9 @@ export function useAppBootstrap() {
       setCurrentUser(user);
       setOnboardingCompleted(user.onboardingCompleted);
       setPreferredLanguage(user.preferredLanguage ?? "en");
+      const targets = buildUserTargets(user);
+      void recomputeNutritionAnalytics({ userId: user.id, targets });
+      void recomputeConsumptionModels({ userId: user.id });
       if (mounted) setIsReady(true);
     };
 

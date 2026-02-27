@@ -3,6 +3,12 @@ import { repositories, queryKeys } from "@/db/repositories";
 import type { DailyNutritionLog, NutritionProfile } from "@/types";
 import { runAlertEngine } from "@/modules/health/alert-engine";
 import { buildUserTargets } from "@/utils/health-calculator";
+import { useAppStore } from "@/store/app-store";
+import { buildResolvedConsumptionLog } from "@/services/consumption-log.service";
+import {
+  recomputeConsumptionModels,
+  recomputeNutritionAnalytics,
+} from "@/services/nutrition-analytics.service";
 
 export function useNutritionProfile(itemId: string) {
   return useQuery({
@@ -30,15 +36,24 @@ export function useRecentLogs(userId: string, from: number, to: number) {
 
 export function useUpsertNutritionMutation() {
   const queryClient = useQueryClient();
+  const userId = useAppStore((s) => s.currentUserId);
   return useMutation({
     mutationFn: (
       profile: Omit<NutritionProfile, "id" | "createdAt"> & { id?: string },
     ) => repositories.nutrition.upsertNutritionProfile(profile),
-    onSuccess: (saved) => {
+    onSuccess: async (saved) => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.nutrition.byItem(saved.expenseItemId),
       });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.nutrition.byRange(0, 0) });
+      void queryClient.invalidateQueries({ queryKey: ["nutrition", "range"] });
+      if (userId) {
+        const user = await repositories.user.getCurrentUser(userId);
+        const targets = buildUserTargets(user ?? {});
+        await recomputeNutritionAnalytics({ userId, targets });
+        await recomputeConsumptionModels({ userId });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.analytics.latest(userId) });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.analytics.models(userId) });
+      }
     },
   });
 }
@@ -48,16 +63,22 @@ export function useLogConsumptionMutation(userId: string) {
   return useMutation({
     mutationFn: async (log: Omit<DailyNutritionLog, "id" | "createdAt" | "userId">) => {
       const profile = await repositories.user.getCurrentUser(userId);
-      const saved = await repositories.nutrition.logConsumption({
-        ...log,
+      const resolved = await buildResolvedConsumptionLog({
         userId,
+        log,
       });
-      await runAlertEngine(userId, buildUserTargets(profile ?? {}));
+      const saved = await repositories.nutrition.logConsumption(resolved);
+      const targets = buildUserTargets(profile ?? {});
+      const analytics = await recomputeNutritionAnalytics({ userId, targets });
+      await recomputeConsumptionModels({ userId });
+      await runAlertEngine(userId, targets, analytics);
       return saved;
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["nutrition"] });
       void queryClient.invalidateQueries({ queryKey: queryKeys.alerts.all(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.analytics.latest(userId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.analytics.models(userId) });
     },
   });
 }

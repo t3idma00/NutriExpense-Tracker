@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { router } from "expo-router";
 import { View } from "react-native";
+import { router } from "expo-router";
 import { Button, Card, Chip, ProgressBar, Text, TextInput } from "react-native-paper";
 import { Screen } from "@/components/layout/screen";
 import { useExpenses } from "@/hooks/use-expenses";
@@ -72,23 +72,35 @@ export default function OnboardingScreen() {
 
   return (
     <Screen>
-      <Text variant="headlineSmall">SmartSpendAI Quick Setup</Text>
-      <Text style={{ color: "#6B7280" }}>
-        Step {step + 1} of {steps.length}: {steps[step]}
-      </Text>
-      <ProgressBar progress={(step + 1) / steps.length} />
+      <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
+            SmartSpendAI quick setup
+          </Text>
+          <Text style={{ color: "#5B6F84" }}>
+            Step {step + 1} of {steps.length}: {steps[step]}
+          </Text>
+          <ProgressBar
+            progress={(step + 1) / steps.length}
+            color="#1F4E82"
+            style={{ height: 8, borderRadius: 999, backgroundColor: "#DEE8F4" }}
+          />
+        </Card.Content>
+      </Card>
 
       {step === 0 ? (
-        <Card>
+        <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
           <Card.Content style={{ gap: 12 }}>
-            <Text variant="titleMedium">Start with essentials</Text>
+            <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+              Start with essentials
+            </Text>
             <TextInput label="Name" value={name} onChangeText={setName} />
-            <Text style={{ color: "#6B7280" }}>Primary goal</Text>
+            <Text style={{ color: "#60748C" }}>Primary goal</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {[
-                { key: "lose_weight", label: "Lose Weight" },
-                { key: "eat_healthier", label: "Eat Healthier" },
-                { key: "track_spending", label: "Track Spending" },
+                { key: "lose_weight", label: "Lose weight" },
+                { key: "eat_healthier", label: "Eat healthier" },
+                { key: "track_spending", label: "Track spending" },
               ].map((entry) => (
                 <Chip
                   key={entry.key}
@@ -104,16 +116,18 @@ export default function OnboardingScreen() {
       ) : null}
 
       {step === 1 ? (
-        <Card>
+        <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
           <Card.Content style={{ gap: 12 }}>
-            <Text variant="titleMedium">Get value now</Text>
-            <Text style={{ color: "#6B7280" }}>
+            <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+              Get value now
+            </Text>
+            <Text style={{ color: "#60748C" }}>
               Scan your first receipt before we ask for more profile data.
             </Text>
             <Button mode="contained" onPress={() => router.push("/(tabs)/scan/receipt")}>
-              Scan First Receipt
+              Scan first receipt
             </Button>
-            <Text style={{ color: hasScannedReceipt ? "#10B981" : "#6B7280" }}>
+            <Text style={{ color: hasScannedReceipt ? "#2F6F57" : "#60748C" }}>
               {hasScannedReceipt ? "Receipt found. Continue to finish setup." : "No receipt scanned yet."}
             </Text>
           </Card.Content>
@@ -121,11 +135,13 @@ export default function OnboardingScreen() {
       ) : null}
 
       {step === 2 ? (
-        <Card>
+        <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
           <Card.Content style={{ gap: 12 }}>
-            <Text variant="titleMedium">Optional targets</Text>
-            <Text style={{ color: "#6B7280" }}>
-              Add weight/height to enable personalized nutrition targets.
+            <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+              Optional targets
+            </Text>
+            <Text style={{ color: "#60748C" }}>
+              Add weight and height to enable personalized nutrition targets.
             </Text>
             <TextInput
               label="Weight (kg)"

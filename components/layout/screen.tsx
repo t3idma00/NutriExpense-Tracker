@@ -24,11 +24,13 @@ export function Screen({
   onRefresh,
 }: ScreenProps) {
   const theme = useTheme();
+  const contentStyle = [{ padding: 14, gap: 14 }, style];
+
   if (scroll) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <ScrollView
-          contentContainerStyle={[{ padding: 16, gap: 16 }, style]}
+          contentContainerStyle={contentStyle}
           refreshControl={
             onRefresh ? (
               <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} />
@@ -43,7 +45,7 @@ export function Screen({
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <View style={[{ flex: 1, padding: 16 }, style]}>{children}</View>
+      <View style={[{ flex: 1, padding: 14 }, style]}>{children}</View>
     </SafeAreaView>
   );
 }

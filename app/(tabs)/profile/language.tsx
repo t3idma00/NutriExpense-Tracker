@@ -2,10 +2,10 @@ import { useState } from "react";
 import { View } from "react-native";
 import { Button, Card, Chip, Snackbar, Text } from "react-native-paper";
 import { useTranslation } from "react-i18next";
-import i18n from "@/services/i18n";
 import { Screen } from "@/components/layout/screen";
-import { useAppStore } from "@/store/app-store";
 import { useUpdateUserMutation } from "@/hooks/use-user";
+import i18n from "@/services/i18n";
+import { useAppStore } from "@/store/app-store";
 
 const languages = [
   { code: "en", label: "English" },
@@ -32,16 +32,29 @@ export default function LanguageSettingsScreen() {
 
   return (
     <Screen>
-      <Text variant="headlineSmall">{t("language")}</Text>
-      <Card>
+      <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
+            {t("language")}
+          </Text>
+          <Text style={{ color: "#5B6F84" }}>
+            Current language: {preferredLanguage.toUpperCase()}
+          </Text>
+        </Card.Content>
+      </Card>
+
+      <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
         <Card.Content style={{ gap: 10 }}>
-          <Text>Current: {preferredLanguage.toUpperCase()}</Text>
+          <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+            App language
+          </Text>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {languages.map((lang) => (
               <Chip
                 key={lang.code}
                 selected={preferredLanguage === lang.code}
                 onPress={() => onSelectLanguage(lang.code)}
+                style={{ backgroundColor: preferredLanguage === lang.code ? "#DFEAF8" : "#EEF2F8" }}
               >
                 {lang.label}
               </Chip>
@@ -50,14 +63,16 @@ export default function LanguageSettingsScreen() {
         </Card.Content>
       </Card>
 
-      <Card>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F4F8FD" }}>
         <Card.Content style={{ gap: 8 }}>
-          <Text variant="titleMedium">Translation Models</Text>
-          <Text style={{ color: "#6B7280" }}>
+          <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+            Translation models
+          </Text>
+          <Text style={{ color: "#60748C" }}>
             On-device model manager is scaffolded. Hook ML Kit model downloads here for full offline translation.
           </Text>
           <Button mode="outlined" disabled>
-            Downloaded Models (Planned)
+            Downloaded models (planned)
           </Button>
         </Card.Content>
       </Card>

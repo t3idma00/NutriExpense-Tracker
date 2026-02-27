@@ -18,4 +18,9 @@ export const queryKeys = {
     profile: (userId?: string) => ["household", "profile", userId] as const,
     members: (userId?: string) => ["household", "members", userId] as const,
   },
+  analytics: {
+    latest: (userId?: string) => ["analytics", "latest", userId] as const,
+    snapshots: (userId?: string, limit?: number) => ["analytics", "snapshots", userId, limit] as const,
+    models: (userId?: string) => ["analytics", "models", userId] as const,
+  },
 };

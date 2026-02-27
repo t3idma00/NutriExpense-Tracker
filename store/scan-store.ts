@@ -6,6 +6,9 @@ interface OcrMeta {
   fallbackConfidence: number;
   agreementScore: number;
   effectiveConfidence: number;
+  primarySource: "raw_override" | "gemini_vision" | "ocr_space" | "demo_fallback";
+  usedDemoFallback: boolean;
+  cloudEnabled: boolean;
 }
 
 interface ScanState {

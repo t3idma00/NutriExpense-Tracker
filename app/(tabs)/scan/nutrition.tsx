@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 import { Button, Card, Menu, Snackbar, Text, TextInput } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Screen } from "@/components/layout/screen";
 import { useExpenses } from "@/hooks/use-expenses";
 import { useUpsertNutritionMutation } from "@/hooks/use-nutrition";
 import { parseNutritionLabel } from "@/modules/nutrition/label-parser";
+import {
+  lookupNutritionByBarcode,
+  resolveBarcodeFromInput,
+} from "@/services/barcode-nutrition.service";
 import { inferNutritionFromText } from "@/services/ai-nutrition.service";
-import { lookupNutritionByBarcode } from "@/services/barcode-nutrition.service";
 
 export default function NutritionScanScreen() {
   const expenseItems = useExpenses({ limit: 50 });
@@ -29,8 +33,13 @@ export default function NutritionScanScreen() {
       return;
     }
 
-    if (barcode.trim()) {
-      const barcodeProfile = await lookupNutritionByBarcode(barcode);
+    const resolvedBarcode = await resolveBarcodeFromInput({
+      barcodeRaw: barcode,
+      rawText: rawLabelText,
+    });
+
+    if (resolvedBarcode) {
+      const barcodeProfile = await lookupNutritionByBarcode(resolvedBarcode);
       if (barcodeProfile) {
         await upsertNutrition.mutateAsync({
           expenseItemId: selectedItemId,
@@ -46,7 +55,11 @@ export default function NutritionScanScreen() {
           aiConfidenceScore: barcodeProfile.confidence,
           rawLabelText: rawLabelText || `Barcode: ${barcodeProfile.barcode}`,
         });
-        setStatus("Saved nutrition profile from barcode database.");
+        setStatus(
+          barcode.trim()
+            ? "Saved nutrition profile from barcode database."
+            : `Barcode detected from label text (${resolvedBarcode}). Saved from barcode database.`,
+        );
         return;
       }
     }
@@ -94,14 +107,22 @@ export default function NutritionScanScreen() {
 
   return (
     <Screen>
-      <Text variant="headlineSmall">Nutrition Label Parser</Text>
-      <Text style={{ color: "#6B7280" }}>
-        Select an expense item, paste nutrition text, and SmartSpendAI parses or infers nutrients.
-      </Text>
+      <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
+            Nutrition label parser
+          </Text>
+          <Text style={{ color: "#5B6F84" }}>
+            Select an expense item, paste nutrition text, and parse or infer nutrient values.
+          </Text>
+        </Card.Content>
+      </Card>
 
-      <Card>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
         <Card.Content style={{ gap: 10 }}>
-          <Text variant="titleMedium">Target Item</Text>
+          <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+            Target item
+          </Text>
           <Menu
             visible={menuVisible}
             onDismiss={() => setMenuVisible(false)}
@@ -118,14 +139,14 @@ export default function NutritionScanScreen() {
                   setSelectedItemId(item.id);
                   setMenuVisible(false);
                 }}
-                title={`${item.name} • ${item.storeName ?? "Store"}`}
+                title={`${item.name} - ${item.storeName ?? "Store"}`}
               />
             ))}
           </Menu>
 
           <TextInput
             mode="outlined"
-            label="Barcode (Optional)"
+            label="Barcode (optional)"
             value={barcode}
             onChangeText={setBarcode}
             keyboardType="number-pad"
@@ -136,24 +157,31 @@ export default function NutritionScanScreen() {
             mode="outlined"
             multiline
             numberOfLines={10}
-            label="Nutrition Facts OCR Text"
+            label="Nutrition facts OCR text"
             value={rawLabelText}
             onChangeText={setRawLabelText}
             placeholder="Paste Nutrition Facts panel text..."
           />
 
           <Button mode="contained" onPress={onAnalyze} loading={upsertNutrition.isPending}>
-            Analyze and Save
+            Analyze and save
           </Button>
         </Card.Content>
       </Card>
 
-      <View style={{ gap: 8 }}>
-        <Text variant="titleSmall">Tips</Text>
-        <Text style={{ color: "#6B7280" }}>
-          Include lines like Serving Size, Calories, Total Fat, Carbohydrate, Protein, Sodium.
-        </Text>
-      </View>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F4F8FD" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <MaterialCommunityIcons name="lightbulb-on-outline" size={17} color="#1F4E82" />
+            <Text variant="titleSmall" style={{ fontWeight: "800", color: "#173D62" }}>
+              Tips
+            </Text>
+          </View>
+          <Text style={{ color: "#60748C" }}>
+            Include lines like Serving Size, Calories, Total Fat, Carbohydrate, Protein, Sodium.
+          </Text>
+        </Card.Content>
+      </Card>
 
       <Snackbar visible={Boolean(status)} onDismiss={() => setStatus(undefined)} duration={2200}>
         {status}

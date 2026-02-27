@@ -58,32 +58,38 @@ export default function FamilyProfileScreen() {
 
   return (
     <Screen>
-      <Text variant="headlineSmall">Family Profile</Text>
-      <Text style={{ color: "#6B7280" }}>
-        Manage household members so SmartSpendAI can personalize nutrition and alerts.
-      </Text>
+      <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
+            Family profile
+          </Text>
+          <Text style={{ color: "#5B6F84" }}>
+            Manage household members to personalize nutrition and alerts.
+          </Text>
+        </Card.Content>
+      </Card>
 
-      <Card>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
         <Card.Content style={{ gap: 10 }}>
-          <Text variant="titleMedium">Household</Text>
-          <TextInput label="Household Name" value={householdName} onChangeText={setHouseholdName} />
-          <Text style={{ color: "#6B7280" }}>Members: {members.data?.length ?? 0}</Text>
+          <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+            Household
+          </Text>
+          <TextInput label="Household name" value={householdName} onChangeText={setHouseholdName} />
+          <Text style={{ color: "#60748C" }}>Members: {members.data?.length ?? 0}</Text>
           <Button mode="contained-tonal" onPress={saveHousehold} loading={updateHousehold.isPending}>
-            Save Household
+            Save household
           </Button>
         </Card.Content>
       </Card>
 
-      <Card>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
         <Card.Content style={{ gap: 10 }}>
-          <Text variant="titleMedium">Add Member</Text>
+          <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+            Add member
+          </Text>
           <TextInput label="Name" value={newName} onChangeText={setNewName} />
-          <TextInput
-            label="Age"
-            value={newAge}
-            onChangeText={setNewAge}
-            keyboardType="numeric"
-          />
+          <TextInput label="Age" value={newAge} onChangeText={setNewAge} keyboardType="numeric" />
+
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {roles.map((role) => (
               <Chip key={role} selected={newRole === role} onPress={() => setNewRole(role)}>
@@ -91,22 +97,27 @@ export default function FamilyProfileScreen() {
               </Chip>
             ))}
           </View>
-          <View style={{ flexDirection: "row", gap: 8 }}>
+
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             {(["female", "male", "other"] as Gender[]).map((gender) => (
               <Chip key={gender} selected={newGender === gender} onPress={() => setNewGender(gender)}>
                 {gender}
               </Chip>
             ))}
           </View>
+
           <Button mode="contained" onPress={addMember} loading={upsertMember.isPending}>
-            Add Member
+            Add member
           </Button>
         </Card.Content>
       </Card>
 
-      <Card>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F6FAFD" }}>
         <Card.Content style={{ gap: 8 }}>
-          <Text variant="titleMedium">Active Members</Text>
+          <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+            Active members
+          </Text>
+
           {(members.data ?? []).map((member) => (
             <View
               key={member.id}
@@ -115,14 +126,14 @@ export default function FamilyProfileScreen() {
                 justifyContent: "space-between",
                 alignItems: "center",
                 borderBottomWidth: 1,
-                borderColor: "#F3F4F6",
+                borderColor: "#E4EAF2",
                 paddingBottom: 8,
               }}
             >
               <View>
-                <Text style={{ fontWeight: "700" }}>{member.name}</Text>
-                <Text style={{ color: "#6B7280", fontSize: 12 }}>
-                  {member.role ?? "member"} | Age {member.age ?? "-"}
+                <Text style={{ fontWeight: "700", color: "#22364B" }}>{member.name}</Text>
+                <Text style={{ color: "#60748C", fontSize: 12 }}>
+                  {member.role ?? "member"} | age {member.age ?? "-"}
                 </Text>
               </View>
               <Button mode="text" onPress={() => removeMember.mutate(member.id)}>
@@ -130,8 +141,9 @@ export default function FamilyProfileScreen() {
               </Button>
             </View>
           ))}
+
           {!members.data?.length ? (
-            <Text style={{ color: "#6B7280" }}>
+            <Text style={{ color: "#60748C" }}>
               No members yet. Add at least one member to enable household insights.
             </Text>
           ) : null}

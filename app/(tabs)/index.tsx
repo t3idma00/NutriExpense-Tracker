@@ -1,117 +1,130 @@
 import { router } from "expo-router";
-import { View } from "react-native";
-import dayjs from "dayjs";
-import { Button, Card, Text } from "react-native-paper";
+import { Pressable, View } from "react-native";
+import { Card, Text } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Screen } from "@/components/layout/screen";
-import { PriceTag } from "@/components/ui/price-tag";
 import { useCurrentUser } from "@/hooks/use-user";
-import { useExpenseSummary, useExpenses } from "@/hooks/use-expenses";
-import { useAlerts } from "@/hooks/use-alerts";
-import { useNutritionAggregate } from "@/hooks/use-nutrition";
-import { buildUserTargets } from "@/utils/health-calculator";
+
+function ActionButton(props: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  accent: string;
+  bg: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={props.onPress}
+      style={{
+        flex: 1,
+        borderRadius: 22,
+        padding: 14,
+        backgroundColor: props.bg,
+        borderWidth: 1,
+        borderColor: `${props.accent}55`,
+        gap: 10,
+      }}
+    >
+      <View
+        style={{
+          width: 46,
+          height: 46,
+          borderRadius: 23,
+          backgroundColor: `${props.accent}22`,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <MaterialCommunityIcons name={props.icon as never} size={23} color={props.accent} />
+      </View>
+
+      <View style={{ gap: 2 }}>
+        <Text style={{ color: "#163B61", fontWeight: "800", fontSize: 16 }}>{props.title}</Text>
+        <Text style={{ color: "#5B7189", fontSize: 12 }}>{props.subtitle}</Text>
+      </View>
+    </Pressable>
+  );
+}
 
 export default function HomeScreen() {
   const { data: user } = useCurrentUser();
-  const now = Date.now();
-  const monthStart = dayjs().startOf("month").valueOf();
-  const dayStart = dayjs().startOf("day").valueOf();
-
-  const summary = useExpenseSummary(monthStart, now);
-  const recentItems = useExpenses({ limit: 3 });
-  const nutrition = useNutritionAggregate(user?.id ?? "", dayStart, now);
-  const alerts = useAlerts(user?.id ?? "");
-  const targets = buildUserTargets(user ?? {});
+  const firstName = user?.name?.trim().split(" ")[0] || "Kumar";
 
   return (
-    <Screen>
-      <View style={{ gap: 4 }}>
-        <Text variant="headlineSmall">Good morning, {user?.name ?? "Smart Shopper"}</Text>
-        <Text style={{ color: "#6B7280" }}>{new Date().toDateString()}</Text>
-      </View>
+    <Screen scroll={false} style={{ justifyContent: "center" }}>
+      <View style={{ gap: 16 }}>
+        <Card style={{ borderRadius: 28, backgroundColor: "#1A2D48", overflow: "hidden" }}>
+          <View
+            style={{
+              position: "absolute",
+              top: -34,
+              right: -20,
+              width: 140,
+              height: 140,
+              borderRadius: 70,
+              backgroundColor: "#2F4C73",
+            }}
+          />
+          <View
+            style={{
+              position: "absolute",
+              bottom: -48,
+              left: -26,
+              width: 120,
+              height: 120,
+              borderRadius: 60,
+              backgroundColor: "#294462",
+            }}
+          />
 
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <Card style={{ flex: 1 }}>
-          <Card.Content style={{ gap: 6 }}>
-            <Text>Monthly Spend</Text>
-            <PriceTag value={summary.data?.totalSpent ?? 0} />
-          </Card.Content>
-        </Card>
-        <Card style={{ flex: 1 }}>
-          <Card.Content style={{ gap: 6 }}>
-            <Text>Today Calories</Text>
-            <Text variant="titleMedium">
-              {Math.round(nutrition.data?.calories ?? 0)} / {targets.calories}
+          <Card.Content style={{ gap: 12, paddingVertical: 18 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: "#3A5A85",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <MaterialCommunityIcons name="home" size={24} color="#F5FAFF" />
+              </View>
+              <View style={{ gap: 2 }}>
+                <Text variant="headlineSmall" style={{ color: "#FFFFFF", fontWeight: "800" }}>
+                  Home
+                </Text>
+                <Text style={{ color: "#CFE0F6" }}>Welcome back, {firstName}</Text>
+              </View>
+            </View>
+
+            <Text style={{ color: "#E2ECF9", lineHeight: 20 }}>
+              Start quickly with receipt capture or voice input.
             </Text>
           </Card.Content>
         </Card>
+
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <ActionButton
+            icon="camera"
+            title="Scan Receipt"
+            subtitle="Capture bill in seconds"
+            accent="#1F4E82"
+            bg="#EFF4FB"
+            onPress={() => router.push("/(tabs)/scan/receipt")}
+          />
+          <ActionButton
+            icon="microphone"
+            title="Voice"
+            subtitle="Speak your shopping notes"
+            accent="#1E7058"
+            bg="#ECF7F2"
+            onPress={() => router.push("/(tabs)/scan/nutrition")}
+          />
+        </View>
       </View>
-
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        <Card style={{ flex: 1 }}>
-          <Card.Content>
-            <Text>Active Alerts</Text>
-            <Text variant="headlineSmall">{alerts.data?.filter((a) => !a.isRead).length ?? 0}</Text>
-          </Card.Content>
-        </Card>
-        <Card style={{ flex: 1 }}>
-          <Card.Content>
-            <Text>Items This Month</Text>
-            <Text variant="headlineSmall">{summary.data?.itemsCount ?? 0}</Text>
-          </Card.Content>
-        </Card>
-      </View>
-
-      <Card>
-        <Card.Content style={{ gap: 10 }}>
-          <Text variant="titleMedium">Quick Scan</Text>
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Button
-              mode="contained"
-              icon="camera"
-              style={{ flex: 1 }}
-              onPress={() => router.push("/(tabs)/scan/receipt")}
-            >
-              Scan Receipt
-            </Button>
-            <Button
-              mode="contained-tonal"
-              icon="food-apple"
-              style={{ flex: 1 }}
-              onPress={() => router.push("/(tabs)/scan/nutrition")}
-            >
-              Scan Label
-            </Button>
-          </View>
-        </Card.Content>
-      </Card>
-
-      <Card>
-        <Card.Content style={{ gap: 10 }}>
-          <Text variant="titleMedium">Recent Purchases</Text>
-          {(recentItems.data ?? []).map((item) => (
-            <View
-              key={item.id}
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                borderBottomWidth: 1,
-                borderColor: "#F3F4F6",
-                paddingBottom: 8,
-              }}
-            >
-              <View>
-                <Text style={{ fontWeight: "600" }}>{item.name}</Text>
-                <Text style={{ color: "#6B7280", fontSize: 12 }}>
-                  {item.storeName ?? "Unknown Store"}
-                </Text>
-              </View>
-              <PriceTag value={item.totalPrice} currency={item.currency} />
-            </View>
-          ))}
-          {!recentItems.data?.length ? <Text style={{ color: "#6B7280" }}>No purchases yet.</Text> : null}
-        </Card.Content>
-      </Card>
     </Screen>
   );
 }

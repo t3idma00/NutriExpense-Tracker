@@ -1,5 +1,9 @@
 import { parseReceiptText } from "@/modules/receipt/receipt-parser";
 import type { ParsedLineItem, ParsedReceipt } from "@/types";
+import {
+  extractReceiptTextFromImage,
+  isCloudReceiptOcrEnabled,
+} from "@/services/receipt-ocr.service";
 
 const demoReceipts = [
   `Whole Foods Market
@@ -68,13 +72,41 @@ function decorateItems(
   });
 }
 
-async function runPrimaryEngine(input: OcrPipelineInput): Promise<{ text: string; confidence: number }> {
+type PrimarySource = "raw_override" | "gemini_vision" | "ocr_space" | "demo_fallback";
+
+async function runPrimaryEngine(
+  input: OcrPipelineInput,
+): Promise<{ text: string; confidence: number; source: PrimarySource }> {
   if (input.rawTextOverride?.trim()) {
-    return { text: input.rawTextOverride, confidence: 0.98 };
+    return {
+      text: input.rawTextOverride,
+      confidence: 0.98,
+      source: "raw_override",
+    };
   }
+
+  const attempt = await extractReceiptTextFromImage(input.imageUri);
+  if (attempt.extraction?.text) {
+    return {
+      text: attempt.extraction.text,
+      confidence: attempt.extraction.confidence,
+      source: attempt.extraction.source,
+    };
+  }
+
+  // Cloud OCR is configured but failed: stop here with explicit error
+  // instead of silently using demo/sample receipt content.
+  if (isCloudReceiptOcrEnabled()) {
+    throw new Error(
+      attempt.errorMessage ??
+        "Cloud OCR failed. Check Gemini API key, quota, or network and retry.",
+    );
+  }
+
   return {
     text: fallbackTextFromImage(input.imageUri),
     confidence: 0.74,
+    source: "demo_fallback",
   };
 }
 
@@ -100,6 +132,9 @@ export interface OcrPipelineResult {
     fallbackConfidence: number;
     agreementScore: number;
     effectiveConfidence: number;
+    primarySource: PrimarySource;
+    usedDemoFallback: boolean;
+    cloudEnabled: boolean;
   };
 }
 
@@ -141,6 +176,9 @@ export async function runReceiptOcrPipeline(
       fallbackConfidence: fallback.confidence,
       agreementScore: agreement,
       effectiveConfidence,
+      primarySource: primary.source,
+      usedDemoFallback: primary.source === "demo_fallback",
+      cloudEnabled: isCloudReceiptOcrEnabled(),
     },
   };
 }

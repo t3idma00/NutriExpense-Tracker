@@ -1,12 +1,28 @@
 import { useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { View } from "react-native";
 import { Button, Card, Snackbar, Text, TextInput } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Screen } from "@/components/layout/screen";
 import { useExpense } from "@/hooks/use-expenses";
 import { useNutritionProfile, useUpsertNutritionMutation } from "@/hooks/use-nutrition";
 import { parseNutritionLabel } from "@/modules/nutrition/label-parser";
+import {
+  lookupNutritionByBarcode,
+  resolveBarcodeFromInput,
+} from "@/services/barcode-nutrition.service";
 import { inferNutritionFromText } from "@/services/ai-nutrition.service";
-import { lookupNutritionByBarcode } from "@/services/barcode-nutrition.service";
+
+function Row(props: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 10 }}>
+      <Text style={{ color: "#60748C" }}>{props.label}</Text>
+      <Text style={{ color: "#1F3550", fontWeight: "700", flex: 1, textAlign: "right" }}>
+        {props.value}
+      </Text>
+    </View>
+  );
+}
 
 export default function ItemNutritionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -21,8 +37,13 @@ export default function ItemNutritionScreen() {
     const item = expense.data;
     if (!item) return;
 
-    if (barcode.trim()) {
-      const barcodeProfile = await lookupNutritionByBarcode(barcode);
+    const resolvedBarcode = await resolveBarcodeFromInput({
+      barcodeRaw: barcode,
+      rawText,
+    });
+
+    if (resolvedBarcode) {
+      const barcodeProfile = await lookupNutritionByBarcode(resolvedBarcode);
       if (barcodeProfile) {
         await upsert.mutateAsync({
           expenseItemId: item.id,
@@ -38,7 +59,11 @@ export default function ItemNutritionScreen() {
           aiConfidenceScore: barcodeProfile.confidence,
           rawLabelText: rawText || `Barcode: ${barcodeProfile.barcode}`,
         });
-        setStatus("Saved from barcode nutrition lookup.");
+        setStatus(
+          barcode.trim()
+            ? "Saved from barcode nutrition lookup."
+            : `Barcode detected from label text (${resolvedBarcode}). Saved from barcode lookup.`,
+        );
         return;
       }
     }
@@ -77,18 +102,30 @@ export default function ItemNutritionScreen() {
       aiConfidenceScore: ai.confidence,
       rawLabelText: rawText,
     });
-    setStatus(ai.confidence < 0.5 ? "Low confidence AI estimate saved." : "AI nutrition estimate saved.");
+    setStatus(
+      ai.confidence < 0.5
+        ? "Low confidence AI estimate saved."
+        : "AI nutrition estimate saved.",
+    );
   };
 
   return (
     <Screen>
-      <Text variant="headlineSmall">Nutrition Intelligence</Text>
-      <Text style={{ color: "#6B7280" }}>{expense.data?.name ?? "Loading item..."}</Text>
+      <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
+            Nutrition intelligence
+          </Text>
+          <Text style={{ color: "#5B6F84" }}>
+            {expense.data?.name ?? "Loading item..."}
+          </Text>
+        </Card.Content>
+      </Card>
 
-      <Card>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
         <Card.Content style={{ gap: 10 }}>
           <TextInput
-            label="Barcode (Optional)"
+            label="Barcode (optional)"
             mode="outlined"
             value={barcode}
             onChangeText={setBarcode}
@@ -96,7 +133,7 @@ export default function ItemNutritionScreen() {
             placeholder="Enter UPC/EAN for Open Food Facts lookup"
           />
           <TextInput
-            label="Nutrition OCR Text"
+            label="Nutrition OCR text"
             mode="outlined"
             multiline
             numberOfLines={9}
@@ -110,21 +147,28 @@ export default function ItemNutritionScreen() {
         </Card.Content>
       </Card>
 
-      <Card>
-        <Card.Content style={{ gap: 6 }}>
-          <Text variant="titleMedium">Current Saved Profile</Text>
+      <Card style={{ borderRadius: 20, backgroundColor: "#F4F8FD" }}>
+        <Card.Content style={{ gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <MaterialCommunityIcons name="clipboard-text-outline" size={18} color="#1F4E82" />
+            <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
+              Current saved profile
+            </Text>
+          </View>
+
           {nutrition.data ? (
             <>
-              <Text>Calories: {nutrition.data.calories?.toFixed(1) ?? "-"} kcal</Text>
-              <Text>Protein: {nutrition.data.proteinG?.toFixed(1) ?? "-"} g</Text>
-              <Text>Carbs: {nutrition.data.carbsG?.toFixed(1) ?? "-"} g</Text>
-              <Text>Fat: {nutrition.data.fatG?.toFixed(1) ?? "-"} g</Text>
-              <Text>
-                Confidence: {Math.round((nutrition.data.aiConfidenceScore ?? 1) * 100)}%
-              </Text>
+              <Row label="Calories" value={`${nutrition.data.calories?.toFixed(1) ?? "-"} kcal`} />
+              <Row label="Protein" value={`${nutrition.data.proteinG?.toFixed(1) ?? "-"} g`} />
+              <Row label="Carbs" value={`${nutrition.data.carbsG?.toFixed(1) ?? "-"} g`} />
+              <Row label="Fat" value={`${nutrition.data.fatG?.toFixed(1) ?? "-"} g`} />
+              <Row
+                label="Confidence"
+                value={`${Math.round((nutrition.data.aiConfidenceScore ?? 1) * 100)}%`}
+              />
             </>
           ) : (
-            <Text style={{ color: "#6B7280" }}>No saved nutrition profile.</Text>
+            <Text style={{ color: "#5F748B" }}>No saved nutrition profile.</Text>
           )}
         </Card.Content>
       </Card>

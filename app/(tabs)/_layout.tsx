@@ -1,26 +1,38 @@
 import { Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useTranslation } from "react-i18next";
+
+const TAB_BAR_COLOR = "#F5F7FB";
+const ACTIVE = "#1F4E82";
+const INACTIVE = "#7E8CA0";
 
 export default function TabsLayout() {
-  const { t } = useTranslation();
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarActiveTintColor: ACTIVE,
+        tabBarInactiveTintColor: INACTIVE,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "700",
+          marginTop: 2,
+        },
         tabBarStyle: {
-          height: 64,
-          paddingBottom: 8,
+          height: 72,
           paddingTop: 8,
-          borderTopLeftRadius: 16,
-          borderTopRightRadius: 16,
+          paddingBottom: 8,
+          borderTopLeftRadius: 22,
+          borderTopRightRadius: 22,
+          borderTopWidth: 1,
+          borderColor: "#D6DEE9",
+          backgroundColor: TAB_BAR_COLOR,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: t("home"),
+          title: "Home",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" size={size} color={color} />
           ),
@@ -29,46 +41,43 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="scan"
         options={{
-          title: t("scan"),
+          title: "Scan",
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="camera" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="expenses"
-        options={{
-          title: t("expenses"),
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="receipt" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="nutrition"
         options={{
-          title: t("nutrition"),
+          title: "Health",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="food-apple" size={size} color={color} />
+            <MaterialCommunityIcons name="heart-pulse" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="alerts"
+        name="expenses"
         options={{
-          title: t("alerts"),
+          title: "List",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="bell-alert" size={size} color={color} />
+            <MaterialCommunityIcons name="format-list-bulleted" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: t("profile"),
+          title: "Family",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account-circle" size={size} color={color} />
+            <MaterialCommunityIcons name="account" size={size} color={color} />
           ),
+        }}
+      />
+      <Tabs.Screen
+        name="alerts"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

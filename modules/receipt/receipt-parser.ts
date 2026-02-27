@@ -2,13 +2,18 @@ import { z } from "zod";
 import type { ParsedReceipt, Unit } from "@/types";
 
 const currencySymbolMap: Record<string, string> = {
-  $: "USD",
-  "EUR": "EUR",
-  "GBP": "GBP",
-  "JPY": "JPY",
-  "INR": "INR",
-  "AUD": "AUD",
-  "CAD": "CAD",
+  "$": "USD",
+  "\u20AC": "EUR",
+  EUR: "EUR",
+  GBP: "GBP",
+  JPY: "JPY",
+  INR: "INR",
+  AUD: "AUD",
+  CAD: "CAD",
+  "\u00A3": "GBP",
+  "\u00A5": "JPY",
+  "\u20B9": "INR",
+  // Legacy mojibake fallbacks from OCR outputs.
   "â‚¬": "EUR",
   "Â£": "GBP",
   "Â¥": "JPY",
@@ -16,8 +21,8 @@ const currencySymbolMap: Record<string, string> = {
 };
 
 const lineItemPattern =
-  /^(?<name>[A-Za-z0-9\s\-\.,&()'%/]+?)\s+(?<price>\$?\d+(?:[\.,]\d{2})?)$/;
-const qtyPattern = /(?<qty>\d+(?:\.\d+)?)\s?(x|@|\*)/i;
+  /^(?<name>[A-Za-z0-9\u00C0-\u024F\s\-\.,&()'%/]+?)\s+(?<price>(?:[$\u20AC\u00A3\u00A5]\s*)?-?\d+(?:[\.,]\d{2})?(?:\s*[$\u20AC\u00A3\u00A5])?)$/u;
+const qtyPattern = /(?<qty>\d+(?:[.,]\d+)?)\s?(x|@|\*|kpl|pcs|pack)/iu;
 
 const parsedLineItemSchema = z.object({
   rawName: z.string().min(1),
@@ -53,6 +58,7 @@ function detectCurrency(text: string): string {
 function parseDate(text: string): number {
   const patterns = [
     /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/,
+    /\b(\d{1,2})\.(\d{1,2})\.(\d{2,4})\b/,
     /\b([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})\b/,
   ];
 
@@ -68,11 +74,44 @@ function parseDate(text: string): number {
   return Date.now();
 }
 
+function parseDecimal(value: string): number {
+  const raw = value.replace(/[^\d,.-]/g, "");
+  if (!raw) return 0;
+
+  const commaIndex = raw.lastIndexOf(",");
+  const dotIndex = raw.lastIndexOf(".");
+
+  let normalized = raw;
+  if (commaIndex >= 0 && dotIndex >= 0) {
+    if (commaIndex > dotIndex) {
+      normalized = raw.replace(/\./g, "").replace(/,/g, ".");
+    } else {
+      normalized = raw.replace(/,/g, "");
+    }
+  } else if (commaIndex >= 0) {
+    normalized = raw.replace(/,/g, ".");
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function parseAmount(line: string): number | null {
   const match = line.match(/(-?\d+(?:[\.,]\d{2})?)/g);
   if (!match?.length) return null;
-  const value = Number(match[match.length - 1].replace(",", "."));
+  const value = parseDecimal(match[match.length - 1]);
   return Number.isFinite(value) ? value : null;
+}
+
+function detectUnit(rawName: string): Unit {
+  if (/\bkg\b/i.test(rawName)) return "kg";
+  if (/\bg\b/i.test(rawName)) return "g";
+  if (/\blb\b/i.test(rawName)) return "lb";
+  if (/\boz\b/i.test(rawName)) return "oz";
+  if (/\bml\b/i.test(rawName)) return "ml";
+  if (/\bl\b/i.test(rawName)) return "L";
+  if (/\bpack\b/i.test(rawName)) return "pack";
+  return "pcs";
 }
 
 function confidenceBand(value: number): "high" | "medium" | "low" {
@@ -87,30 +126,32 @@ function extractItems(lines: string[]) {
   for (const line of lines) {
     const clean = line.trim();
     if (!clean) continue;
-    if (/subtotal|tax|total|change|cash|visa|master|amex/i.test(clean)) continue;
+    if (/subtotal|tax|total|change|cash|visa|master|amex|yhteensa|summa|alv|kampanja|norm\./i.test(clean)) {
+      continue;
+    }
 
     const match = clean.match(lineItemPattern);
     if (!match?.groups) continue;
 
     const rawName = match.groups.name.trim();
-    const price = Number(match.groups.price.replace(/[^\d.]/g, ""));
+    const price = parseDecimal(match.groups.price);
     if (!rawName || !Number.isFinite(price)) continue;
 
     const qtyMatch = rawName.match(qtyPattern);
-    const quantity = qtyMatch?.groups?.qty ? Number(qtyMatch.groups.qty) : 1;
-    const unit: Unit = /kg|g|lb|oz|l|ml/i.test(rawName) ? "g" : "pcs";
+    const quantity = qtyMatch?.groups?.qty ? parseDecimal(qtyMatch.groups.qty) : 1;
+    const unit: Unit = detectUnit(rawName);
     const unitPrice = quantity > 0 ? price / quantity : price;
     const confidence = Math.min(
       0.97,
-      0.62 +
-        (qtyMatch ? 0.1 : 0) +
-        (price > 0 ? 0.15 : 0) +
-        (rawName.length > 4 ? 0.08 : 0),
+      0.62 + (qtyMatch ? 0.1 : 0) + (price > 0 ? 0.15 : 0) + (rawName.length > 4 ? 0.08 : 0),
     );
 
     items.push({
-      rawName: rawName.replace(qtyPattern, "").trim(),
-      quantity,
+      rawName: rawName
+        .replace(qtyPattern, "")
+        .replace(/[\u20AC$\u00A3\u00A5]\s*\/\s*[A-Za-z]+/g, "")
+        .trim(),
+      quantity: quantity > 0 ? quantity : 1,
       unit,
       unitPrice,
       totalPrice: price,
@@ -142,9 +183,9 @@ export function parseReceiptText(rawText: string): ParsedReceipt {
     const amount = parseAmount(line);
     if (amount === null) continue;
 
-    if (/subtotal/i.test(line)) subtotal = amount;
-    if (/tax/i.test(line)) tax = amount;
-    if (/total/i.test(line)) total = Math.max(total, amount);
+    if (/subtotal|summa/i.test(line)) subtotal = amount;
+    if (/tax|alv/i.test(line)) tax = amount;
+    if (/total|yhteensa/i.test(line)) total = Math.max(total, amount);
   }
 
   if (!subtotal) subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);

@@ -42,6 +42,14 @@ export type AlertType =
   | "expiry_warning"
   | "spending_alert";
 export type AlertSeverity = "low" | "medium" | "high" | "critical";
+export type NutrientMetricKey =
+  | "calories"
+  | "proteinG"
+  | "carbsG"
+  | "fatG"
+  | "fiberG"
+  | "sugarG"
+  | "sodiumMg";
 
 export interface UserProfile {
   id: string;
@@ -183,7 +191,43 @@ export interface DailyNutritionLog {
   fiberG?: number;
   sugarG?: number;
   sodiumMg?: number;
+  confidenceScore?: number;
+  source?: NutritionSource;
   createdAt: number;
+}
+
+export interface NutritionAnalyticsMetric {
+  key: NutrientMetricKey;
+  recentAvg: number;
+  median: number;
+  p90: number;
+  zScore: number;
+  trendSlope: number;
+  targetGapRatio: number;
+}
+
+export interface NutritionAnalyticsSnapshot {
+  id: string;
+  userId: string;
+  fromTs: number;
+  toTs: number;
+  reliabilityScore: number;
+  coverageScore: number;
+  anomalyCount: number;
+  metrics: NutritionAnalyticsMetric[];
+  createdAt: number;
+}
+
+export interface ConsumptionModel {
+  id: string;
+  userId: string;
+  expenseItemId: string;
+  avgDailyServings: number;
+  trendSlope: number;
+  variability: number;
+  confidence: number;
+  lastPredictedDepletion?: number;
+  updatedAt: number;
 }
 
 export interface HealthAlert {

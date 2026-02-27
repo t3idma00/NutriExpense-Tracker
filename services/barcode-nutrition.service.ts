@@ -22,6 +22,14 @@ export interface BarcodeNutritionResult {
   confidence: number;
 }
 
+interface GeminiGenerateContentResponse {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{ text?: string }>;
+    };
+  }>;
+}
+
 function parseNumber(value: unknown): number | undefined {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -31,6 +39,125 @@ function toMgFromGrams(value: unknown): number | undefined {
   const grams = parseNumber(value);
   if (typeof grams !== "number") return undefined;
   return grams * 1000;
+}
+
+function normalizeBarcode(value: string): string {
+  return value.replace(/[^\d]/g, "");
+}
+
+function validBarcode(value: string): boolean {
+  return value.length >= 8 && value.length <= 14;
+}
+
+function extractBarcodeCandidatesFromText(rawText: string): string[] {
+  if (!rawText.trim()) return [];
+
+  const candidates = new Set<string>();
+  const directMatches = rawText.match(/\b\d{8,14}\b/g) ?? [];
+  for (const entry of directMatches) {
+    const normalized = normalizeBarcode(entry);
+    if (validBarcode(normalized)) candidates.add(normalized);
+  }
+
+  const looseMatches = rawText.match(/\d[\d\s-]{7,20}\d/g) ?? [];
+  for (const entry of looseMatches) {
+    const normalized = normalizeBarcode(entry);
+    if (validBarcode(normalized)) candidates.add(normalized);
+  }
+
+  return [...candidates];
+}
+
+function extractJsonFromText(rawText: string): unknown {
+  const fenced = rawText.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] ?? rawText).trim();
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(candidate.slice(start, end + 1));
+    }
+    throw new Error("Gemini response did not contain valid JSON.");
+  }
+}
+
+async function extractBarcodeViaGemini(rawText: string): Promise<string | null> {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY?.trim();
+  if (!apiKey || !rawText.trim()) return null;
+
+  const models = [
+    process.env.EXPO_PUBLIC_GEMINI_MODEL?.trim(),
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-001",
+    "gemini-2.0-flash-lite-001",
+  ].filter((entry): entry is string => Boolean(entry));
+
+  for (const model of models) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+        model,
+      )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text:
+                    "Extract the most likely UPC/EAN barcode from this OCR label text. " +
+                    'Return JSON only: {"barcode":"digits-or-empty"}',
+                },
+                { text: rawText.slice(0, 3500) },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 120,
+            responseMimeType: "application/json",
+          },
+        }),
+      });
+
+      if (!response.ok) continue;
+      const payload = (await response.json()) as GeminiGenerateContentResponse;
+      const text = payload.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text ?? "")
+        .join("\n")
+        .trim();
+      if (!text) continue;
+
+      const json = extractJsonFromText(text) as { barcode?: string };
+      const normalized = normalizeBarcode(json.barcode ?? "");
+      if (validBarcode(normalized)) return normalized;
+    } catch {
+      // Try next model candidate.
+    }
+  }
+
+  return null;
+}
+
+export async function resolveBarcodeFromInput(input: {
+  barcodeRaw?: string;
+  rawText?: string;
+}): Promise<string | null> {
+  const typed = normalizeBarcode(input.barcodeRaw ?? "");
+  if (validBarcode(typed)) return typed;
+
+  const fromText = extractBarcodeCandidatesFromText(input.rawText ?? "");
+  if (fromText.length) return fromText[0];
+
+  return extractBarcodeViaGemini(input.rawText ?? "");
 }
 
 async function getCached(barcode: string): Promise<BarcodeNutritionResult | null> {
@@ -68,8 +195,8 @@ async function setCached(barcode: string, payload: BarcodeNutritionResult): Prom
 }
 
 export async function lookupNutritionByBarcode(barcodeRaw: string): Promise<BarcodeNutritionResult | null> {
-  const barcode = barcodeRaw.trim();
-  if (!barcode) return null;
+  const barcode = normalizeBarcode(barcodeRaw);
+  if (!validBarcode(barcode)) return null;
 
   const cached = await getCached(barcode);
   if (cached) return cached;

@@ -103,6 +103,8 @@ export const SCHEMA_STATEMENTS: string[] = [
     fiber_g REAL,
     sugar_g REAL,
     sodium_mg REAL,
+    confidence_score REAL,
+    source TEXT,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (expense_item_id) REFERENCES expense_items(id)
@@ -176,10 +178,38 @@ export const SCHEMA_STATEMENTS: string[] = [
     payload_json TEXT NOT NULL,
     updated_at INTEGER NOT NULL
   );`,
+  `CREATE TABLE IF NOT EXISTS nutrition_analytics_snapshots (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    from_ts INTEGER NOT NULL,
+    to_ts INTEGER NOT NULL,
+    reliability_score REAL NOT NULL,
+    coverage_score REAL NOT NULL,
+    anomaly_count INTEGER NOT NULL DEFAULT 0,
+    metrics_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );`,
+  `CREATE TABLE IF NOT EXISTS consumption_models (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT NOT NULL,
+    expense_item_id TEXT NOT NULL,
+    avg_daily_servings REAL NOT NULL DEFAULT 0,
+    trend_slope REAL NOT NULL DEFAULT 0,
+    variability REAL NOT NULL DEFAULT 0,
+    confidence REAL NOT NULL DEFAULT 0,
+    last_predicted_depletion INTEGER,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(user_id, expense_item_id),
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (expense_item_id) REFERENCES expense_items(id)
+  );`,
   `CREATE INDEX IF NOT EXISTS idx_expense_items_purchase_category ON expense_items (purchase_date, category);`,
   `CREATE INDEX IF NOT EXISTS idx_daily_logs_date_user ON daily_nutrition_logs (log_date, user_id);`,
   `CREATE INDEX IF NOT EXISTS idx_alerts_user_read ON health_alerts (user_id, is_read);`,
   `CREATE INDEX IF NOT EXISTS idx_family_members_household ON family_members (household_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_analytics_user_to ON nutrition_analytics_snapshots (user_id, to_ts DESC);`,
+  `CREATE INDEX IF NOT EXISTS idx_consumption_models_user ON consumption_models (user_id, confidence DESC);`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS expense_items_fts USING fts5(id, name, content='expense_items', content_rowid='rowid');`,
   `CREATE TRIGGER IF NOT EXISTS expense_items_ai AFTER INSERT ON expense_items BEGIN
       INSERT INTO expense_items_fts(rowid, id, name) VALUES (new.rowid, new.id, new.name);
