@@ -61,7 +61,7 @@ export default function ReceiptScanScreen() {
             <Text style={{ color: cloudOcrEnabled ? "#1E7058" : "#8A5A1F", fontSize: 12 }}>
               {cloudOcrEnabled
                 ? "Cloud OCR enabled: receipt text will be extracted from captured images."
-                : "Cloud OCR disabled: set EXPO_PUBLIC_GEMINI_API_KEY (or EXPO_PUBLIC_OCR_SPACE_API_KEY) for real text extraction."}
+                : "Cloud OCR disabled: set EXPO_PUBLIC_GEMINI_API_KEY for real text extraction."}
             </Text>
           </View>
         </Card.Content>

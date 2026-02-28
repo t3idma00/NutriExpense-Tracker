@@ -210,6 +210,14 @@ export const SCHEMA_STATEMENTS: string[] = [
   `CREATE INDEX IF NOT EXISTS idx_family_members_household ON family_members (household_id);`,
   `CREATE INDEX IF NOT EXISTS idx_analytics_user_to ON nutrition_analytics_snapshots (user_id, to_ts DESC);`,
   `CREATE INDEX IF NOT EXISTS idx_consumption_models_user ON consumption_models (user_id, confidence DESC);`,
+  `CREATE TABLE IF NOT EXISTS nutrition_name_cache (
+    normalized_name TEXT PRIMARY KEY NOT NULL,
+    payload_json TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'ai_inferred',
+    confidence REAL NOT NULL DEFAULT 0.7,
+    hit_count INTEGER NOT NULL DEFAULT 1,
+    updated_at INTEGER NOT NULL
+  );`,
   `CREATE VIRTUAL TABLE IF NOT EXISTS expense_items_fts USING fts5(id, name, content='expense_items', content_rowid='rowid');`,
   `CREATE TRIGGER IF NOT EXISTS expense_items_ai AFTER INSERT ON expense_items BEGIN
       INSERT INTO expense_items_fts(rowid, id, name) VALUES (new.rowid, new.id, new.name);

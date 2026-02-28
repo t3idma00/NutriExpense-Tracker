@@ -1,8 +1,10 @@
 import { parseReceiptText } from "@/modules/receipt/receipt-parser";
 import type { ParsedLineItem, ParsedReceipt } from "@/types";
 import {
+  convertGeminiReceiptToParsed,
   extractReceiptTextFromImage,
   isCloudReceiptOcrEnabled,
+  type GeminiStructuredReceipt,
 } from "@/services/receipt-ocr.service";
 
 const demoReceipts = [
@@ -30,25 +32,6 @@ function fallbackTextFromImage(imageUri: string): string {
   return demoReceipts[0];
 }
 
-function normalizeForMatch(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
-}
-
-function agreementScore(primaryText: string, fallbackText: string): number {
-  const primaryTokens = normalizeForMatch(primaryText);
-  const fallbackTokens = normalizeForMatch(fallbackText);
-  if (!primaryTokens.length || !fallbackTokens.length) return 0;
-
-  const right = new Set(fallbackTokens);
-  const overlap = primaryTokens.filter((token) => right.has(token)).length;
-  return overlap / Math.max(primaryTokens.length, fallbackTokens.length);
-}
-
 function confidenceBand(value: number): "high" | "medium" | "low" {
   if (value >= 0.9) return "high";
   if (value >= 0.6) return "medium";
@@ -74,51 +57,6 @@ function decorateItems(
 
 type PrimarySource = "raw_override" | "gemini_vision" | "ocr_space" | "demo_fallback";
 
-async function runPrimaryEngine(
-  input: OcrPipelineInput,
-): Promise<{ text: string; confidence: number; source: PrimarySource }> {
-  if (input.rawTextOverride?.trim()) {
-    return {
-      text: input.rawTextOverride,
-      confidence: 0.98,
-      source: "raw_override",
-    };
-  }
-
-  const attempt = await extractReceiptTextFromImage(input.imageUri);
-  if (attempt.extraction?.text) {
-    return {
-      text: attempt.extraction.text,
-      confidence: attempt.extraction.confidence,
-      source: attempt.extraction.source,
-    };
-  }
-
-  // Cloud OCR is configured but failed: stop here with explicit error
-  // instead of silently using demo/sample receipt content.
-  if (isCloudReceiptOcrEnabled()) {
-    throw new Error(
-      attempt.errorMessage ??
-        "Cloud OCR failed. Check Gemini API key, quota, or network and retry.",
-    );
-  }
-
-  return {
-    text: fallbackTextFromImage(input.imageUri),
-    confidence: 0.74,
-    source: "demo_fallback",
-  };
-}
-
-async function runFallbackEngine(primaryText: string): Promise<{ text: string; confidence: number }> {
-  return {
-    text: primaryText
-      .replace(/\s{2,}/g, " ")
-      .replace(/[|]/g, "I"),
-    confidence: 0.68,
-  };
-}
-
 export interface OcrPipelineInput {
   imageUri: string;
   rawTextOverride?: string;
@@ -126,6 +64,7 @@ export interface OcrPipelineInput {
 
 export interface OcrPipelineResult {
   parsed: ParsedReceipt;
+  geminiReceipt?: GeminiStructuredReceipt;
   stages: Array<{ stage: string; completedAt: number }>;
   ocrMeta: {
     primaryConfidence: number;
@@ -149,36 +88,113 @@ export async function runReceiptOcrPipeline(
 
   stage("enhance-image");
 
+  // Path 1: Raw text override (testing/demo mode)
+  if (input.rawTextOverride?.trim()) {
+    stage("ocr-primary");
+    stage("parse-items");
+    const parsed = parseReceiptText(input.rawTextOverride);
+    parsed.items = decorateItems(parsed.items, 0.98);
+    parsed.confidence = Math.max(parsed.confidence, 0.95);
+    stage("validate");
+
+    return {
+      parsed,
+      stages,
+      ocrMeta: {
+        primaryConfidence: 0.98,
+        fallbackConfidence: 0.98,
+        agreementScore: 1,
+        effectiveConfidence: 0.98,
+        primarySource: "raw_override",
+        usedDemoFallback: false,
+        cloudEnabled: isCloudReceiptOcrEnabled(),
+      },
+    };
+  }
+
+  // Path 2: Gemini structured extraction (primary — smart parsing)
   stage("ocr-primary");
-  const primary = await runPrimaryEngine(input);
-  stage("ocr-fallback");
-  const fallback = await runFallbackEngine(primary.text);
+  const attempt = await extractReceiptTextFromImage(input.imageUri);
 
-  const agreement = agreementScore(primary.text, fallback.text);
-  const effectiveConfidence = Math.max(
-    0.45,
-    (primary.confidence + fallback.confidence + agreement) / 3,
-  );
-  const extractedText = agreement >= 0.65 ? primary.text : fallback.text;
+  if (attempt.structuredReceipt) {
+    stage("parse-items");
+    console.log("[ocr-engine] Using Gemini structured receipt (smart parsing)");
 
+    const parsed = convertGeminiReceiptToParsed(attempt.structuredReceipt);
+    const effectiveConfidence = parsed.confidence;
+    parsed.items = decorateItems(parsed.items, effectiveConfidence);
+
+    stage("validate");
+
+    return {
+      parsed,
+      geminiReceipt: attempt.structuredReceipt,
+      stages,
+      ocrMeta: {
+        primaryConfidence: attempt.extraction?.confidence ?? effectiveConfidence,
+        fallbackConfidence: effectiveConfidence,
+        agreementScore: 1,
+        effectiveConfidence,
+        primarySource: "gemini_vision",
+        usedDemoFallback: false,
+        cloudEnabled: true,
+      },
+    };
+  }
+
+  // Path 3: Gemini returned raw text but no structured data — use regex parser
+  if (attempt.extraction?.text) {
+    stage("parse-items");
+    console.log("[ocr-engine] Falling back to text-based parsing");
+
+    const parsed = parseReceiptText(attempt.extraction.text);
+    const effectiveConfidence = Math.max(0.45, attempt.extraction.confidence * 0.8);
+    parsed.items = decorateItems(parsed.items, effectiveConfidence);
+    parsed.confidence = Math.max(parsed.confidence * 0.75, effectiveConfidence);
+
+    stage("validate");
+
+    return {
+      parsed,
+      stages,
+      ocrMeta: {
+        primaryConfidence: attempt.extraction.confidence,
+        fallbackConfidence: effectiveConfidence,
+        agreementScore: 0.5,
+        effectiveConfidence,
+        primarySource: attempt.extraction.source,
+        usedDemoFallback: false,
+        cloudEnabled: isCloudReceiptOcrEnabled(),
+      },
+    };
+  }
+
+  // Cloud OCR is configured but failed entirely
+  if (isCloudReceiptOcrEnabled()) {
+    throw new Error(
+      attempt.errorMessage ??
+        "Cloud OCR failed. Check Gemini API key, quota, or network and retry.",
+    );
+  }
+
+  // Path 4: No cloud OCR — use demo fallback
   stage("parse-items");
-  const parsed = parseReceiptText(extractedText);
-  parsed.items = decorateItems(parsed.items, effectiveConfidence);
-  parsed.confidence = Math.max(parsed.confidence * 0.75, effectiveConfidence);
-
+  const demoText = fallbackTextFromImage(input.imageUri);
+  const parsed = parseReceiptText(demoText);
+  parsed.items = decorateItems(parsed.items, 0.74);
   stage("validate");
 
   return {
     parsed,
     stages,
     ocrMeta: {
-      primaryConfidence: primary.confidence,
-      fallbackConfidence: fallback.confidence,
-      agreementScore: agreement,
-      effectiveConfidence,
-      primarySource: primary.source,
-      usedDemoFallback: primary.source === "demo_fallback",
-      cloudEnabled: isCloudReceiptOcrEnabled(),
+      primaryConfidence: 0.74,
+      fallbackConfidence: 0.68,
+      agreementScore: 0.5,
+      effectiveConfidence: 0.74,
+      primarySource: "demo_fallback",
+      usedDemoFallback: true,
+      cloudEnabled: false,
     },
   };
 }

@@ -20,6 +20,7 @@ export default function ProcessingScreen() {
   const rawTextOverride = useScanStore((s) => s.rawTextOverride);
   const setParsedReceipt = useScanStore((s) => s.setParsedReceipt);
   const setOcrMeta = useScanStore((s) => s.setOcrMeta);
+  const setGeminiReceipt = useScanStore((s) => s.setGeminiReceipt);
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string>();
 
@@ -49,6 +50,9 @@ export default function ProcessingScreen() {
         setStep(4);
         setParsedReceipt(result.parsed);
         setOcrMeta(result.ocrMeta);
+        if (result.geminiReceipt) {
+          setGeminiReceipt(result.geminiReceipt);
+        }
         setTimeout(() => router.replace("/(tabs)/scan/review"), 500);
       } catch (entry) {
         if (cancelled) return;
@@ -61,7 +65,7 @@ export default function ProcessingScreen() {
     return () => {
       cancelled = true;
     };
-  }, [imageUri, rawTextOverride, setParsedReceipt, setOcrMeta]);
+  }, [imageUri, rawTextOverride, setParsedReceipt, setOcrMeta, setGeminiReceipt]);
 
   return (
     <Screen scroll={false} style={{ justifyContent: "center", gap: 16 }}>

@@ -1,56 +1,59 @@
 import { useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { router } from "expo-router";
 import {
   Button,
   Card,
+  Chip,
   Divider,
-  IconButton,
   Menu,
   Snackbar,
   Text,
   TextInput,
 } from "react-native-paper";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { Screen } from "@/components/layout/screen";
 import { useSaveReceiptMutation } from "@/hooks/use-expenses";
 import { useScanStore } from "@/store/scan-store";
 import { detectAndTranslate } from "@/modules/translate/translation.service";
 
+/* ─── Small helper components ─── */
+
+function InfoPill(props: { icon: string; text: string }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      <MaterialCommunityIcons name={props.icon as never} size={12} color="#5B7A9B" />
+      <Text style={{ fontSize: 11, color: "#5B7A9B" }}>{props.text}</Text>
+    </View>
+  );
+}
+
+/* ─── Main screen ─── */
+
 export default function ReceiptReviewScreen() {
   const parsed = useScanStore((s) => s.parsedReceipt);
   const imageUri = useScanStore((s) => s.receiptImageUri);
   const ocrMeta = useScanStore((s) => s.ocrMeta);
+  const geminiReceipt = useScanStore((s) => s.geminiReceipt);
   const clearDraft = useScanStore((s) => s.clearDraft);
   const saveMutation = useSaveReceiptMutation();
 
   const [storeName, setStoreName] = useState(parsed?.storeName ?? "");
   const [currencyMenuOpen, setCurrencyMenuOpen] = useState(false);
-  const [currency, setCurrency] = useState(parsed?.currency ?? "USD");
+  const [currency, setCurrency] = useState(parsed?.currency ?? "EUR");
   const [snackbar, setSnackbar] = useState<string>();
-  const [showOnlyNeedsReview, setShowOnlyNeedsReview] = useState(false);
   const [items, setItems] = useState(parsed?.items.map((item) => ({ ...item })) ?? []);
-  const [expandedRows, setExpandedRows] = useState<Record<number, boolean>>(() =>
-    Object.fromEntries(
-      (parsed?.items ?? []).map((item, index) => [
-        index,
-        (item.confidenceBand ?? "medium") !== "high",
-      ]),
-    ),
-  );
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingStore, setEditingStore] = useState(false);
 
   const total = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.totalPrice || 0), 0),
     [items],
   );
 
-  const visibleItems = useMemo(
-    () =>
-      items
-        .map((item, index) => ({ item, index }))
-        .filter(({ item }) =>
-          showOnlyNeedsReview ? (item.confidenceBand ?? "medium") !== "high" : true,
-        ),
-    [items, showOnlyNeedsReview],
+  const totalDiscount = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.discount || 0), 0),
+    [items],
   );
 
   if (!parsed || !imageUri) {
@@ -70,18 +73,22 @@ export default function ReceiptReviewScreen() {
     );
   }
 
+  const meta = parsed.meta;
+
   const updateItem = (index: number, patch: Partial<(typeof items)[number]>) => {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const removeItem = (index: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+    if (editingIndex === index) setEditingIndex(null);
   };
 
   const onTranslateNames = async () => {
     const translated = await Promise.all(
       items.map(async (item) => {
         const result = await detectAndTranslate(item.rawName, "en");
-        return {
-          ...item,
-          rawName: result.translatedText,
-        };
+        return { ...item, rawName: result.translatedText };
       }),
     );
     setItems(translated);
@@ -90,6 +97,7 @@ export default function ReceiptReviewScreen() {
   const onSave = async () => {
     await saveMutation.mutateAsync({
       imageUri,
+      geminiReceipt,
       parsed: {
         ...parsed,
         storeName,
@@ -106,189 +114,301 @@ export default function ReceiptReviewScreen() {
 
   return (
     <Screen scroll={false}>
-      <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 28 }}>
-        <Card style={{ borderRadius: 22, backgroundColor: "#EDF3FB" }}>
-          <Card.Content style={{ gap: 8 }}>
-            <Text variant="headlineSmall" style={{ fontWeight: "800", color: "#153A5E" }}>
-              Review receipt
-            </Text>
-            <Text style={{ color: "#5B6F84" }}>
-              Validate low-confidence rows before final save.
-            </Text>
-          </Card.Content>
-        </Card>
+      <ScrollView contentContainerStyle={{ gap: 10, paddingBottom: 32 }}>
 
-        <Card style={{ borderRadius: 20, backgroundColor: "#F8FAFD" }}>
-          <Card.Content style={{ gap: 8 }}>
-            <TextInput label="Store name" value={storeName} onChangeText={setStoreName} />
-
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "#2D425A" }}>
-                Detected language: {parsed.detectedLanguage.toUpperCase()}
-              </Text>
-              <Button onPress={onTranslateNames}>Translate items</Button>
-            </View>
-
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "#2D425A", fontWeight: "700" }}>
-                Total: {total.toFixed(2)} {currency}
-              </Text>
-              <Menu
-                visible={currencyMenuOpen}
-                onDismiss={() => setCurrencyMenuOpen(false)}
-                anchor={<Button onPress={() => setCurrencyMenuOpen(true)}>{currency}</Button>}
-              >
-                {["USD", "EUR", "GBP", "JPY"].map((option) => (
-                  <Menu.Item
-                    key={option}
-                    onPress={() => {
-                      setCurrency(option);
-                      setCurrencyMenuOpen(false);
-                    }}
-                    title={option}
-                  />
-                ))}
-              </Menu>
-            </View>
-
-            <Text style={{ color: "#63788F", fontSize: 12 }}>
-              OCR confidence {Math.round((ocrMeta?.effectiveConfidence ?? parsed.confidence) * 100)}% | agreement {Math.round((ocrMeta?.agreementScore ?? 0.5) * 100)}%
-            </Text>
-            {ocrMeta?.usedDemoFallback ? (
-              <View
-                style={{
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#E7C58A",
-                  backgroundColor: "#FFF6E8",
-                  padding: 10,
-                  gap: 4,
-                }}
-              >
-                <Text style={{ color: "#8A5A1F", fontWeight: "800" }}>
-                  Demo OCR fallback is active
+        {/* ═══ Store Header ═══ */}
+        <Card style={{ borderRadius: 16, backgroundColor: "#EDF3FB" }}>
+          <Card.Content style={{ gap: 6 }}>
+            {editingStore ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TextInput
+                  dense
+                  mode="outlined"
+                  style={{ flex: 1 }}
+                  value={storeName}
+                  onChangeText={setStoreName}
+                  onBlur={() => setEditingStore(false)}
+                  autoFocus
+                />
+                <Button compact onPress={() => setEditingStore(false)}>Done</Button>
+              </View>
+            ) : (
+              <Pressable onPress={() => setEditingStore(true)} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text variant="titleLarge" style={{ fontWeight: "800", color: "#12395E", flex: 1 }}>
+                  {storeName || "Tap to set store name"}
                 </Text>
-                <Text style={{ color: "#7A6648", fontSize: 12 }}>
-                  Cloud OCR is disabled, so this receipt uses sample/demo extraction only.
-                  Add `EXPO_PUBLIC_GEMINI_API_KEY` in `.env` and restart with `npm run start:clear`.
+                <MaterialCommunityIcons name="pencil-outline" size={16} color="#7B9BBF" />
+              </Pressable>
+            )}
+
+            {/* Meta pills */}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
+              {meta?.time ? <InfoPill icon="clock-outline" text={meta.time} /> : null}
+              {parsed.date ? (
+                <InfoPill icon="calendar-outline" text={new Date(parsed.date).toLocaleDateString()} />
+              ) : null}
+              {meta?.storeAddress ? <InfoPill icon="map-marker-outline" text={meta.storeAddress} /> : null}
+              {meta?.receiptNumber ? <InfoPill icon="receipt" text={`#${meta.receiptNumber}`} /> : null}
+              {meta?.paymentMethod ? <InfoPill icon="credit-card-outline" text={meta.paymentMethod} /> : null}
+              {meta?.memberNumber ? <InfoPill icon="card-account-details-outline" text={meta.memberNumber} /> : null}
+            </View>
+
+            <Text style={{ fontSize: 11, color: "#8A9DB4" }}>
+              AI confidence: {Math.round((ocrMeta?.effectiveConfidence ?? parsed.confidence) * 100)}%
+              {parsed.detectedLanguage ? ` · ${parsed.detectedLanguage.toUpperCase()}` : ""}
+            </Text>
+
+            {ocrMeta?.usedDemoFallback ? (
+              <View style={{
+                borderRadius: 8,
+                backgroundColor: "#FFF6E8",
+                padding: 8,
+                marginTop: 2,
+              }}>
+                <Text style={{ color: "#8A5A1F", fontSize: 11 }}>
+                  Demo mode — add EXPO_PUBLIC_GEMINI_API_KEY for real OCR.
                 </Text>
               </View>
             ) : null}
           </Card.Content>
         </Card>
 
-        <Card style={{ borderRadius: 20, backgroundColor: "#F7FAFF" }}>
-          <Card.Content style={{ gap: 8 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text variant="titleMedium" style={{ fontWeight: "800", color: "#173D62" }}>
-                Items
+        {/* ═══ Items List ═══ */}
+        <Card style={{ borderRadius: 16, backgroundColor: "#fff" }}>
+          <Card.Content style={{ gap: 0, paddingHorizontal: 12, paddingVertical: 8 }}>
+            {/* Header row */}
+            <View style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingBottom: 6,
+            }}>
+              <Text style={{ fontWeight: "800", color: "#12395E", fontSize: 15 }}>
+                Items ({items.length})
               </Text>
-              <Button
-                compact
-                mode={showOnlyNeedsReview ? "contained-tonal" : "text"}
-                onPress={() => setShowOnlyNeedsReview((prev) => !prev)}
-              >
-                {showOnlyNeedsReview ? "Show all" : "Review only"}
+              <Button compact mode="text" onPress={onTranslateNames} labelStyle={{ fontSize: 12 }}>
+                Translate
               </Button>
             </View>
 
-            <Text style={{ color: "#63788F", fontSize: 12 }}>
-              High-confidence items are auto-collapsed.
-            </Text>
-
-            {visibleItems.map(({ item, index }) => {
-              const band = item.confidenceBand ?? "medium";
-              const borderColor = band === "high" ? "#2C9D79" : band === "medium" ? "#8A5A1F" : "#A33F2A";
-              const isExpanded = expandedRows[index] ?? true;
+            {items.map((item, index) => {
+              const isEditing = editingIndex === index;
 
               return (
-                <View
-                  key={`${item.rawName}-${index}`}
-                  style={{
-                    gap: 6,
-                    borderLeftWidth: 4,
-                    borderLeftColor: borderColor,
-                    paddingLeft: 8,
-                    paddingBottom: 6,
-                  }}
-                >
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: "700", color: "#21364D" }}>
-                        {item.rawName || "Unnamed item"}
+                <View key={`${item.rawName}-${index}`}>
+                  {/* ── Compact item row ── */}
+                  <Pressable
+                    onPress={() => setEditingIndex(isEditing ? null : index)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: 8,
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text style={{ fontWeight: "600", color: "#1D3A56", fontSize: 14 }} numberOfLines={1}>
+                        {item.rawName || "Unnamed"}
                       </Text>
-                      <Text style={{ color: "#63788F", fontSize: 12 }}>
-                        {Math.round((item.confidence ?? 0) * 100)}% confidence ({band})
-                      </Text>
+                      {/* Subtitle: qty/weight info */}
+                      {(item.quantity !== 1 || item.discount) ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          {item.quantity !== 1 ? (
+                            <Text style={{ fontSize: 11, color: "#7B9BBF" }}>
+                              {item.isWeighed
+                                ? `${item.quantity} kg × ${item.unitPrice.toFixed(2)}/kg`
+                                : `${item.quantity} × ${item.unitPrice.toFixed(2)}`}
+                            </Text>
+                          ) : null}
+                          {item.discount && item.discount > 0 ? (
+                            <Text style={{ fontSize: 11, color: "#2E7D32", fontWeight: "600" }}>
+                              -{item.discount.toFixed(2)} saved
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </View>
-                    <Button
-                      compact
-                      mode="text"
-                      onPress={() => setExpandedRows((prev) => ({ ...prev, [index]: !isExpanded }))}
-                    >
-                      {isExpanded ? "Collapse" : "Edit"}
-                    </Button>
-                    <IconButton
-                      icon="delete-outline"
-                      onPress={() => setItems((prev) => prev.filter((_, entryIndex) => entryIndex !== index))}
-                    />
-                  </View>
 
-                  {isExpanded ? (
-                    <>
+                    <Text style={{ fontWeight: "700", color: "#12395E", fontSize: 14, minWidth: 50, textAlign: "right" }}>
+                      {item.totalPrice.toFixed(2)}
+                    </Text>
+
+                    <MaterialCommunityIcons
+                      name={isEditing ? "chevron-up" : "chevron-down"}
+                      size={18}
+                      color="#9BB0C7"
+                    />
+                  </Pressable>
+
+                  {/* ── Expanded edit form ── */}
+                  {isEditing ? (
+                    <View style={{
+                      backgroundColor: "#F5F8FC",
+                      borderRadius: 10,
+                      padding: 10,
+                      gap: 8,
+                      marginBottom: 4,
+                    }}>
                       <TextInput
-                        style={{ flex: 1 }}
-                        label="Item name"
+                        dense
+                        mode="outlined"
+                        label="Name"
                         value={item.rawName}
-                        onChangeText={(value) => updateItem(index, { rawName: value })}
+                        onChangeText={(v) => updateItem(index, { rawName: v })}
                       />
                       <View style={{ flexDirection: "row", gap: 8 }}>
                         <TextInput
+                          dense
+                          mode="outlined"
                           style={{ flex: 1 }}
                           label="Qty"
                           keyboardType="decimal-pad"
                           value={String(item.quantity)}
-                          onChangeText={(value) => updateItem(index, { quantity: Number(value) || 1 })}
+                          onChangeText={(v) => updateItem(index, { quantity: Number(v) || 1 })}
                         />
                         <TextInput
+                          dense
+                          mode="outlined"
                           style={{ flex: 1 }}
-                          label="Price"
+                          label="Unit price"
+                          keyboardType="decimal-pad"
+                          value={String(item.unitPrice)}
+                          onChangeText={(v) => updateItem(index, { unitPrice: Number(v) || 0 })}
+                        />
+                        <TextInput
+                          dense
+                          mode="outlined"
+                          style={{ flex: 1 }}
+                          label="Total"
                           keyboardType="decimal-pad"
                           value={String(item.totalPrice)}
-                          onChangeText={(value) => updateItem(index, { totalPrice: Number(value) || 0 })}
+                          onChangeText={(v) => updateItem(index, { totalPrice: Number(v) || 0 })}
                         />
                       </View>
-                    </>
+                      <Button
+                        compact
+                        mode="text"
+                        textColor="#C62828"
+                        onPress={() => removeItem(index)}
+                        icon="delete-outline"
+                        labelStyle={{ fontSize: 12 }}
+                      >
+                        Remove item
+                      </Button>
+                    </View>
                   ) : null}
 
-                  <Divider style={{ marginTop: 4 }} />
+                  {index < items.length - 1 ? (
+                    <Divider style={{ backgroundColor: "#E8EFF6" }} />
+                  ) : null}
                 </View>
               );
             })}
 
-            <Button
-              mode="outlined"
-              onPress={() =>
+            {/* Add item */}
+            <Pressable
+              onPress={() => {
                 setItems((prev) => [
                   ...prev,
                   {
                     rawName: "",
                     quantity: 1,
-                    unit: "pcs",
+                    unit: "pcs" as const,
                     unitPrice: 0,
                     totalPrice: 0,
                     confidence: 1,
-                    confidenceBand: "high",
+                    confidenceBand: "high" as const,
                   },
-                ])
-              }
+                ]);
+                setEditingIndex(items.length);
+              }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                paddingVertical: 10,
+                marginTop: 4,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: "#D4E0ED",
+                borderStyle: "dashed",
+              }}
             >
-              Add item manually
-            </Button>
+              <MaterialCommunityIcons name="plus" size={16} color="#4B7BAF" />
+              <Text style={{ color: "#4B7BAF", fontWeight: "600", fontSize: 13 }}>Add item</Text>
+            </Pressable>
           </Card.Content>
         </Card>
 
-        <Button mode="contained" onPress={onSave} loading={saveMutation.isPending}>
+        {/* ═══ Totals ═══ */}
+        <Card style={{ borderRadius: 16, backgroundColor: "#F0F6FD" }}>
+          <Card.Content style={{ gap: 4, paddingVertical: 10 }}>
+            {totalDiscount > 0 ? (
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: "#2E7D32", fontSize: 13 }}>Total savings</Text>
+                <Text style={{ color: "#2E7D32", fontWeight: "700", fontSize: 13 }}>
+                  -{totalDiscount.toFixed(2)} {currency}
+                </Text>
+              </View>
+            ) : null}
+            {parsed.tax > 0 ? (
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: "#5B7A9B", fontSize: 13 }}>Tax</Text>
+                <Text style={{ color: "#5B7A9B", fontSize: 13 }}>{parsed.tax.toFixed(2)} {currency}</Text>
+              </View>
+            ) : null}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ fontWeight: "800", color: "#12395E", fontSize: 18 }}>Total</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={{ fontWeight: "800", color: "#12395E", fontSize: 18 }}>
+                  {total.toFixed(2)}
+                </Text>
+                <Menu
+                  visible={currencyMenuOpen}
+                  onDismiss={() => setCurrencyMenuOpen(false)}
+                  anchor={
+                    <Chip compact onPress={() => setCurrencyMenuOpen(true)}>{currency}</Chip>
+                  }
+                >
+                  {["EUR", "USD", "GBP", "SEK", "NOK", "DKK", "JPY", "INR"].map((opt) => (
+                    <Menu.Item
+                      key={opt}
+                      onPress={() => { setCurrency(opt); setCurrencyMenuOpen(false); }}
+                      title={opt}
+                    />
+                  ))}
+                </Menu>
+              </View>
+            </View>
+            {/* Mismatch warning */}
+            {parsed.total > 0 && Math.abs(total - parsed.total) > 0.05 ? (
+              <View style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                backgroundColor: "#FFF3E0",
+                padding: 6,
+                borderRadius: 8,
+                marginTop: 2,
+              }}>
+                <MaterialCommunityIcons name="alert-outline" size={14} color="#E65100" />
+                <Text style={{ fontSize: 11, color: "#E65100" }}>
+                  Receipt total was {parsed.total.toFixed(2)} — items sum differs by {Math.abs(total - parsed.total).toFixed(2)}
+                </Text>
+              </View>
+            ) : null}
+          </Card.Content>
+        </Card>
+
+        {/* ═══ Save ═══ */}
+        <Button
+          mode="contained"
+          onPress={onSave}
+          loading={saveMutation.isPending}
+          style={{ borderRadius: 12 }}
+          contentStyle={{ paddingVertical: 4 }}
+        >
           Save receipt
         </Button>
       </ScrollView>

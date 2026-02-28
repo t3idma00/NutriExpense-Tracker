@@ -250,8 +250,25 @@ export interface ParsedLineItem {
   unit: Unit;
   unitPrice: number;
   totalPrice: number;
+  originalPrice?: number;
+  discount?: number;
+  isWeighed?: boolean;
   confidence: number;
   confidenceBand?: "high" | "medium" | "low";
+}
+
+export interface ReceiptMeta {
+  receiptNumber?: string;
+  time?: string;
+  phone?: string;
+  storeAddress?: string;
+  cashier?: string;
+  register?: string;
+  paymentMethod?: string;
+  memberNumber?: string;
+  bonusInfo?: string;
+  totalDiscount?: number;
+  itemCount?: number;
 }
 
 export interface ParsedReceipt {
@@ -265,6 +282,7 @@ export interface ParsedReceipt {
   total: number;
   confidence: number;
   rawText: string;
+  meta?: ReceiptMeta;
 }
 
 export interface NutritionAggregate {

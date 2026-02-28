@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { repositories, queryKeys } from "@/db/repositories";
 import type { ParsedReceipt } from "@/types";
+import type { GeminiStructuredReceipt } from "@/services/receipt-ocr.service";
+import { autoSaveNutritionForReceipt } from "@/services/auto-nutrition.service";
 
 export function useExpenses(filters?: Parameters<typeof repositories.expense.listItems>[0]) {
   return useQuery({
@@ -34,11 +36,36 @@ export function useCategorySpend(from: number, to: number) {
 export function useSaveReceiptMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { parsed: ParsedReceipt; imageUri: string }) =>
-      repositories.expense.createReceiptWithItems({
+    mutationFn: async (input: {
+      parsed: ParsedReceipt;
+      imageUri: string;
+      geminiReceipt?: GeminiStructuredReceipt;
+    }) => {
+      const result = await repositories.expense.createReceiptWithItems({
         parsed: input.parsed,
         imageUri: input.imageUri,
-      }),
+      });
+
+      // Auto-save nutrition profiles (fire-and-forget)
+      if (input.geminiReceipt?.items?.length) {
+        void autoSaveNutritionForReceipt({
+          savedItems: result.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+          })),
+          geminiItems: input.geminiReceipt.items
+            .filter((gi) => gi.description)
+            .map((gi) => ({
+              name: gi.description!,
+              nutrition: gi.nutrition,
+            })),
+        }).catch((err) =>
+          console.warn("[auto-nutrition] Failed:", err),
+        );
+      }
+
+      return result;
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all });
     },
