@@ -3,6 +3,7 @@ import { repositories, queryKeys } from "@/db/repositories";
 import type { ParsedReceipt } from "@/types";
 import type { GeminiStructuredReceipt } from "@/services/receipt-ocr.service";
 import { autoSaveNutritionForReceipt } from "@/services/auto-nutrition.service";
+import { syncService } from "@/services/sync.service";
 
 export function useExpenses(filters?: Parameters<typeof repositories.expense.listItems>[0]) {
   return useQuery({
@@ -74,6 +75,10 @@ export function useSaveReceiptMutation() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.expenses.all });
+      // Sync to PostgreSQL in background
+      void syncService.pushChanges().catch((err) =>
+        console.warn("[sync] Background sync failed:", err),
+      );
     },
   });
 }

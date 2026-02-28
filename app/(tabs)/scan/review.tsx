@@ -56,6 +56,16 @@ export default function ReceiptReviewScreen() {
     [items],
   );
 
+  // Receipt total validation
+  const receiptTotal = parsed?.total ?? 0;
+  const difference = Math.abs(total - receiptTotal);
+  const tolerance = Math.max(0.50, receiptTotal * 0.01);
+  const hasReceiptTotal = receiptTotal > 0;
+  const isMatch = hasReceiptTotal && difference <= tolerance;
+  const isMismatch = hasReceiptTotal && difference > tolerance;
+  const diffPercent = receiptTotal > 0 ? (difference / receiptTotal) * 100 : 0;
+  const itemsMissing = total < receiptTotal; // items sum less than receipt = missing items
+
   if (!parsed || !imageUri) {
     return (
       <Screen>
@@ -358,10 +368,12 @@ export default function ReceiptReviewScreen() {
                 <Text style={{ color: "#5B7A9B", fontSize: 13 }}>{parsed.tax.toFixed(2)} {currency}</Text>
               </View>
             ) : null}
+
+            {/* Items sum */}
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontWeight: "800", color: "#12395E", fontSize: 18 }}>Total</Text>
+              <Text style={{ fontWeight: "700", color: "#12395E", fontSize: 15 }}>Items total</Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontWeight: "800", color: "#12395E", fontSize: 18 }}>
+                <Text style={{ fontWeight: "700", color: "#12395E", fontSize: 15 }}>
                   {total.toFixed(2)}
                 </Text>
                 <Menu
@@ -381,35 +393,163 @@ export default function ReceiptReviewScreen() {
                 </Menu>
               </View>
             </View>
-            {/* Mismatch warning */}
-            {parsed.total > 0 && Math.abs(total - parsed.total) > 0.05 ? (
-              <View style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 4,
-                backgroundColor: "#FFF3E0",
-                padding: 6,
-                borderRadius: 8,
-                marginTop: 2,
-              }}>
-                <MaterialCommunityIcons name="alert-outline" size={14} color="#E65100" />
-                <Text style={{ fontSize: 11, color: "#E65100" }}>
-                  Receipt total was {parsed.total.toFixed(2)} — items sum differs by {Math.abs(total - parsed.total).toFixed(2)}
+
+            {/* Receipt printed total */}
+            {hasReceiptTotal ? (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={{ color: "#5B7A9B", fontSize: 13 }}>Receipt total</Text>
+                <Text style={{ color: "#5B7A9B", fontSize: 13 }}>
+                  {receiptTotal.toFixed(2)} {currency}
                 </Text>
               </View>
             ) : null}
           </Card.Content>
         </Card>
 
+        {/* ═══ Validation Card ═══ */}
+        {hasReceiptTotal ? (
+          isMatch ? (
+            /* ── Match ── */
+            <Card style={{ borderRadius: 16, backgroundColor: "#E8F5E9" }}>
+              <Card.Content style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 }}>
+                <MaterialCommunityIcons name="check-circle" size={28} color="#2E7D32" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: "800", color: "#1B5E20", fontSize: 14 }}>
+                    All items accounted for!
+                  </Text>
+                  <Text style={{ color: "#388E3C", fontSize: 12 }}>
+                    Receipt total matches perfectly
+                  </Text>
+                </View>
+              </Card.Content>
+            </Card>
+          ) : (
+            /* ── Mismatch ── */
+            <Card style={{
+              borderRadius: 16,
+              backgroundColor: diffPercent > 20 ? "#FBE9E7" : diffPercent > 5 ? "#FFF3E0" : "#FFF8E1",
+              borderWidth: 1,
+              borderColor: diffPercent > 20 ? "#FFAB91" : diffPercent > 5 ? "#FFE0B2" : "#FFF9C4",
+            }}>
+              <Card.Content style={{ gap: 10, paddingVertical: 12 }}>
+                {/* Header */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <MaterialCommunityIcons
+                    name={diffPercent > 20 ? "alert-circle-outline" : diffPercent > 5 ? "magnify-scan" : "information-outline"}
+                    size={28}
+                    color={diffPercent > 20 ? "#D84315" : diffPercent > 5 ? "#E65100" : "#F9A825"}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{
+                      fontWeight: "800",
+                      fontSize: 14,
+                      color: diffPercent > 20 ? "#BF360C" : diffPercent > 5 ? "#E65100" : "#F57F17",
+                    }}>
+                      {diffPercent > 20
+                        ? "Looks like we missed a few things!"
+                        : diffPercent > 5
+                          ? "Some items might be hiding!"
+                          : "Almost there!"}
+                    </Text>
+                    <Text style={{
+                      fontSize: 12,
+                      color: diffPercent > 20 ? "#D84315" : diffPercent > 5 ? "#EF6C00" : "#F9A825",
+                    }}>
+                      {diffPercent > 20
+                        ? `${difference.toFixed(2)} ${currency} worth of items not captured`
+                        : diffPercent > 5
+                          ? `${difference.toFixed(2)} ${currency} unaccounted for`
+                          : `Tiny difference of ${difference.toFixed(2)} ${currency} — likely rounding or a small fee`}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Side-by-side comparison */}
+                <View style={{
+                  flexDirection: "row",
+                  backgroundColor: "rgba(255,255,255,0.7)",
+                  borderRadius: 10,
+                  padding: 10,
+                  gap: 8,
+                }}>
+                  <View style={{ flex: 1, alignItems: "center", gap: 2 }}>
+                    <Text style={{ fontSize: 11, color: "#5B7A9B" }}>Receipt says</Text>
+                    <Text style={{ fontWeight: "800", fontSize: 17, color: "#12395E" }}>
+                      {receiptTotal.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={{ justifyContent: "center" }}>
+                    <MaterialCommunityIcons name="arrow-right" size={18} color="#9BB0C7" />
+                  </View>
+                  <View style={{ flex: 1, alignItems: "center", gap: 2 }}>
+                    <Text style={{ fontSize: 11, color: "#5B7A9B" }}>Items sum</Text>
+                    <Text style={{ fontWeight: "800", fontSize: 17, color: isMismatch ? "#D84315" : "#12395E" }}>
+                      {total.toFixed(2)}
+                    </Text>
+                  </View>
+                  <View style={{ justifyContent: "center" }}>
+                    <MaterialCommunityIcons name="equal" size={18} color="#9BB0C7" />
+                  </View>
+                  <View style={{ flex: 1, alignItems: "center", gap: 2 }}>
+                    <Text style={{ fontSize: 11, color: "#5B7A9B" }}>
+                      {itemsMissing ? "Missing" : "Extra"}
+                    </Text>
+                    <Text style={{
+                      fontWeight: "800",
+                      fontSize: 17,
+                      color: diffPercent > 20 ? "#D84315" : "#E65100",
+                    }}>
+                      {itemsMissing ? "+" : "-"}{difference.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Action buttons */}
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 2 }}>
+                  <Button
+                    mode="contained"
+                    icon="camera-retake"
+                    onPress={() => {
+                      clearDraft();
+                      router.replace("/(tabs)/scan/receipt");
+                    }}
+                    style={{
+                      flex: 1,
+                      borderRadius: 10,
+                      backgroundColor: diffPercent > 20 ? "#E65100" : "#F57C00",
+                    }}
+                    labelStyle={{ fontSize: 13, fontWeight: "700" }}
+                  >
+                    Scan Again
+                  </Button>
+                  <Button
+                    mode="text"
+                    onPress={onSave}
+                    loading={saveMutation.isPending}
+                    style={{ flex: 1, borderRadius: 10 }}
+                    textColor="#8D6E63"
+                    labelStyle={{ fontSize: 13 }}
+                  >
+                    Save Anyway
+                  </Button>
+                </View>
+              </Card.Content>
+            </Card>
+          )
+        ) : null}
+
         {/* ═══ Save ═══ */}
         <Button
           mode="contained"
           onPress={onSave}
           loading={saveMutation.isPending}
-          style={{ borderRadius: 12 }}
+          style={{
+            borderRadius: 12,
+            backgroundColor: isMismatch ? "#B0BEC5" : undefined,
+          }}
           contentStyle={{ paddingVertical: 4 }}
         >
-          Save receipt
+          {isMismatch ? "Save Anyway" : "Save receipt"}
         </Button>
       </ScrollView>
 
