@@ -1,5 +1,6 @@
 import { getDb } from "@/db/database";
 import type { ExpenseCategory, ExpenseItem, ParsedReceipt, Receipt } from "@/types";
+import type { GeminiItemNutrition } from "@/services/receipt-ocr.service";
 import { createId } from "@/utils/id";
 
 export interface ExpenseFilters {
@@ -52,6 +53,7 @@ function mapExpenseRow(row: Record<string, unknown>): ExpenseRow {
   return {
     id: String(row.id),
     receiptId: String(row.receipt_id),
+    catalogId: row.catalog_id ? String(row.catalog_id) : undefined,
     name: String(row.name),
     nameTranslated: row.name_translated ? String(row.name_translated) : undefined,
     category: String(row.category) as ExpenseCategory,
@@ -105,6 +107,7 @@ export class ExpenseRepository {
     parsed: ParsedReceipt;
     imageUri: string;
     storeAddress?: string;
+    geminiItems?: Array<{ name: string; nutrition?: GeminiItemNutrition; matchedCatalogName?: string }>;
   }): Promise<{ receipt: Receipt; items: ExpenseItem[] }> {
     const db = await getDb();
     const now = Date.now();
@@ -121,22 +124,74 @@ export class ExpenseRepository {
       createdAt: now,
     };
 
-    const items: ExpenseItem[] = await Promise.all(
-      input.parsed.items.map(async (item) => ({
+    // Build Gemini lookup by normalized name (nutrition + catalog match)
+    const geminiLookup = new Map<string, { nutrition?: GeminiItemNutrition; matchedCatalogName?: string }>();
+    if (input.geminiItems) {
+      const { normalizeName } = await import("@/utils/normalize-name");
+      for (const gi of input.geminiItems) {
+        if (gi.name) {
+          geminiLookup.set(normalizeName(gi.name), {
+            nutrition: gi.nutrition,
+            matchedCatalogName: gi.matchedCatalogName,
+          });
+        }
+      }
+    }
+
+    // Resolve catalog entries and build items
+    const items: ExpenseItem[] = [];
+    for (const parsedItem of input.parsed.items) {
+      const { normalizeName } = await import("@/utils/normalize-name");
+      const normalized = normalizeName(parsedItem.rawName);
+
+      // Find matching Gemini data for this item
+      const geminiData = geminiLookup.get(normalized);
+      const nutrition = geminiData?.nutrition;
+
+      // Resolve category from memory first
+      const category = await this.resolveCategoryFromMemory(parsedItem.rawName);
+
+      // Find or create in product catalog
+      // Use AI-matched catalog name for better deduplication when available
+      let catalogId: string | undefined;
+      try {
+        const { CatalogRepository } = await import("@/db/repositories/catalog-repository");
+        const catalogRepo = new CatalogRepository();
+
+        // If Gemini matched this to a known product, use that name for catalog lookup
+        // This ensures "KEVYTMAITO 1L" matches existing "KEVYTMAITO" entry
+        const catalogName = geminiData?.matchedCatalogName ?? parsedItem.rawName;
+        if (geminiData?.matchedCatalogName) {
+          console.log(`[expense] AI-matched "${parsedItem.rawName}" → "${geminiData.matchedCatalogName}"`);
+        }
+
+        const catalogEntry = await catalogRepo.findOrCreate({
+          rawName: catalogName,
+          category,
+          totalPrice: parsedItem.totalPrice,
+          nutrition,
+        });
+        catalogId = catalogEntry.id;
+      } catch (err) {
+        console.warn("[expense] Catalog findOrCreate failed:", err);
+      }
+
+      items.push({
         id: createId(),
         receiptId: receipt.id,
-        name: item.rawName,
-        category: await this.resolveCategoryFromMemory(item.rawName),
-        quantity: item.quantity,
-        unit: item.unit,
-        unitPrice: item.unitPrice,
-        totalPrice: item.totalPrice,
+        catalogId,
+        name: parsedItem.rawName,
+        category,
+        quantity: parsedItem.quantity,
+        unit: parsedItem.unit,
+        unitPrice: parsedItem.unitPrice,
+        totalPrice: parsedItem.totalPrice,
         currency: input.parsed.currency,
         purchaseDate: input.parsed.date,
         tags: [],
         createdAt: now,
-      })),
-    );
+      });
+    }
 
     await db.withTransactionAsync(async () => {
       await db.runAsync(
@@ -161,12 +216,13 @@ export class ExpenseRepository {
       for (const item of items) {
         await db.runAsync(
           `INSERT INTO expense_items (
-            id, receipt_id, name, name_translated, category, subcategory, quantity, unit, unit_price,
+            id, receipt_id, catalog_id, name, name_translated, category, subcategory, quantity, unit, unit_price,
             total_price, currency, purchase_date, expiry_date, brand, barcode, tags, notes, version, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             item.id,
             item.receiptId,
+            item.catalogId ?? null,
             item.name,
             item.nameTranslated ?? null,
             item.category,

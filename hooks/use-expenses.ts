@@ -41,9 +41,19 @@ export function useSaveReceiptMutation() {
       imageUri: string;
       geminiReceipt?: GeminiStructuredReceipt;
     }) => {
+      // Build gemini items for catalog + nutrition integration
+      const geminiItems = input.geminiReceipt?.items
+        ?.filter((gi) => gi.name)
+        .map((gi) => ({
+          name: gi.name,
+          nutrition: gi.nutrition,
+          matchedCatalogName: gi.matchedCatalogName,
+        }));
+
       const result = await repositories.expense.createReceiptWithItems({
         parsed: input.parsed,
         imageUri: input.imageUri,
+        geminiItems,
       });
 
       // Auto-save nutrition profiles (fire-and-forget)
@@ -52,13 +62,9 @@ export function useSaveReceiptMutation() {
           savedItems: result.items.map((item) => ({
             id: item.id,
             name: item.name,
+            catalogId: item.catalogId,
           })),
-          geminiItems: input.geminiReceipt.items
-            .filter((gi) => gi.description)
-            .map((gi) => ({
-              name: gi.description!,
-              nutrition: gi.nutrition,
-            })),
+          geminiItems: geminiItems ?? [],
         }).catch((err) =>
           console.warn("[auto-nutrition] Failed:", err),
         );

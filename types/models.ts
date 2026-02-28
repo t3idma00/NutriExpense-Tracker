@@ -121,6 +121,7 @@ export interface Receipt {
 export interface ExpenseItem {
   id: string;
   receiptId: string;
+  catalogId?: string;
   name: string;
   nameTranslated?: string;
   category: ExpenseCategory;
@@ -242,6 +243,46 @@ export interface HealthAlert {
   messageTranslated?: string;
   isRead: 0 | 1;
   triggeredAt: number;
+}
+
+export interface ProductCatalogNutrition {
+  isFood: boolean;
+  servingSizeG?: number;
+  caloriesPer100g?: number;
+  proteinGPer100g?: number;
+  carbsGPer100g?: number;
+  fatGPer100g?: number;
+  fiberGPer100g?: number;
+  sugarGPer100g?: number;
+  sodiumMgPer100g?: number;
+  cholesterolMgPer100g?: number;
+  [key: string]: unknown;
+}
+
+export interface ProductCatalog {
+  id: string;
+  normalizedName: string;
+  displayName: string;
+  displayNameTranslated?: string;
+  category: ExpenseCategory;
+  subcategory?: string;
+  brand?: string;
+  barcode?: string;
+  isFood: boolean;
+  nutritionJson?: ProductCatalogNutrition;
+  nutritionSource?: NutritionSource;
+  nutritionConfidence?: number;
+  nutritionUpdatedAt?: number;
+  tags: string[];
+  firstSeenAt: number;
+  lastSeenAt: number;
+  purchaseCount: number;
+  avgPrice?: number;
+  minPrice?: number;
+  maxPrice?: number;
+  lastPrice?: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ParsedLineItem {

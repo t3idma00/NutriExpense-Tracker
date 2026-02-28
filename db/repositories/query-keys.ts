@@ -23,4 +23,11 @@ export const queryKeys = {
     snapshots: (userId?: string, limit?: number) => ["analytics", "snapshots", userId, limit] as const,
     models: (userId?: string) => ["analytics", "models", userId] as const,
   },
+  catalog: {
+    all: ["catalog"] as const,
+    byId: (id: string) => ["catalog", "detail", id] as const,
+    search: (query: string) => ["catalog", "search", query] as const,
+    topProducts: (limit?: number) => ["catalog", "top", limit] as const,
+    priceHistory: (id: string) => ["catalog", "price-history", id] as const,
+  },
 };

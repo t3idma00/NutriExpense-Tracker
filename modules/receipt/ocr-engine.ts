@@ -4,6 +4,7 @@ import {
   convertGeminiReceiptToParsed,
   extractReceiptTextFromImage,
   isCloudReceiptOcrEnabled,
+  type CatalogPromptItem,
   type GeminiStructuredReceipt,
 } from "@/services/receipt-ocr.service";
 
@@ -112,9 +113,21 @@ export async function runReceiptOcrPipeline(
     };
   }
 
+  // Fetch known products from catalog for AI context
+  let catalogContext: CatalogPromptItem[] | undefined;
+  try {
+    const { repositories } = await import("@/db/repositories");
+    catalogContext = await repositories.catalog.getPromptContext(100);
+    if (catalogContext.length > 0) {
+      console.log(`[ocr-engine] Loaded ${catalogContext.length} known products for AI context`);
+    }
+  } catch (err) {
+    console.warn("[ocr-engine] Could not load catalog context:", err);
+  }
+
   // Path 2: Gemini structured extraction (primary — smart parsing)
   stage("ocr-primary");
-  const attempt = await extractReceiptTextFromImage(input.imageUri);
+  const attempt = await extractReceiptTextFromImage(input.imageUri, catalogContext);
 
   if (attempt.structuredReceipt) {
     stage("parse-items");

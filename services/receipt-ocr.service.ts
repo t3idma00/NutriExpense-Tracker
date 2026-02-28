@@ -58,6 +58,7 @@ export interface GeminiStructuredReceipt {
     weightKg?: number;
     pricePerKg?: number;
     nutrition?: GeminiItemNutrition;
+    matchedCatalogName?: string;
   }>;
   totals: {
     subtotal: number;
@@ -264,7 +265,8 @@ Return this EXACT JSON structure (all prices as numbers with dot decimal, e.g. 1
         "sugarGPer100g": 1.7,
         "sodiumMgPer100g": 33,
         "nutritionConfidence": 0.9
-      }
+      },
+      "matchedCatalogName": null
     },
     {
       "name": "IRTONAMUJA",
@@ -288,7 +290,8 @@ Return this EXACT JSON structure (all prices as numbers with dot decimal, e.g. 1
         "sugarGPer100g": 55,
         "sodiumMgPer100g": 20,
         "nutritionConfidence": 0.75
-      }
+      },
+      "matchedCatalogName": "IRTONAMUJA"
     }
   ],
   "totals": {
@@ -342,6 +345,22 @@ Guidelines for accuracy:
 - Set nutritionConfidence: 0.7-0.85 for reasonable estimates (mixed/processed items)
 - Set nutritionConfidence: 0.5-0.7 for uncertain items (vague names)
 - All values must be per 100g, using dot decimal notation
+
+═══════════════════════════════════════════════════════════
+STEP 5: MATCH AGAINST KNOWN PRODUCTS (if provided)
+═══════════════════════════════════════════════════════════
+
+If a "KNOWN PRODUCTS" list is provided below the image, compare each receipt item against it.
+
+For each item, add a "matchedCatalogName" field:
+- If the item matches a known product (same or very similar name), set matchedCatalogName to the EXACT name from the known list
+- If the known product already has nutrition data (hasNutrition=true), you may SKIP the nutrition estimation and set nutrition to null — the app will reuse the stored data
+- If no match is found, set matchedCatalogName to null and provide full nutrition estimation as usual
+
+Matching rules:
+- "KEVYTMAITO 1L" matches known "KEVYTMAITO" (ignore quantity/size suffixes)
+- "OLTERMANNI 17%" matches known "OLTERMANNI 17%" (exact brand match)
+- Do NOT match items with fundamentally different products
 
 ═══════════════════════════════════════════════════════════
 VALIDATION CHECKLIST (verify before returning)
@@ -577,8 +596,17 @@ export function convertGeminiReceiptToParsed(
 /*  Structured extraction via Gemini Vision                            */
 /* ------------------------------------------------------------------ */
 
+export interface CatalogPromptItem {
+  name: string;
+  category: string;
+  isFood: boolean;
+  hasNutrition: boolean;
+  caloriesPer100g?: number;
+}
+
 async function extractStructuredReceiptViaGemini(
   imageUri: string,
+  catalogContext?: CatalogPromptItem[],
 ): Promise<ReceiptOcrAttempt> {
   const apiKey = extractGeminiKey();
   console.log(`[receipt-ocr] Gemini API key present: ${Boolean(apiKey)}`);
@@ -619,6 +647,27 @@ async function extractStructuredReceiptViaGemini(
     "gemini-2.0-flash-001",
   ]);
 
+  // Build prompt with optional catalog context
+  let fullPrompt = STRUCTURED_RECEIPT_PROMPT;
+  if (catalogContext && catalogContext.length > 0) {
+    const catalogLines = catalogContext.map((item) => {
+      const nutrition = item.hasNutrition
+        ? `${item.caloriesPer100g ?? "?"}cal`
+        : "no nutrition";
+      return `  - ${item.name} | ${item.category} | ${item.isFood ? "food" : "non-food"} | ${nutrition}`;
+    });
+    fullPrompt += `\n\n═══════════════════════════════════════════════════════════
+KNOWN PRODUCTS (from user's purchase history)
+═══════════════════════════════════════════════════════════
+
+Match receipt items against these known products when possible.
+If matched, set "matchedCatalogName" to the exact name below.
+If the known product has nutrition data, you may skip re-estimating nutrition (set nutrition to null).
+
+${catalogLines.join("\n")}`;
+    console.log(`[receipt-ocr] Prompt includes ${catalogContext.length} known products`);
+  }
+
   let lastError = "Gemini could not parse this receipt image.";
 
   for (const model of models) {
@@ -629,7 +678,7 @@ async function extractStructuredReceiptViaGemini(
         model,
         base64Image,
         mimeType,
-        prompt: STRUCTURED_RECEIPT_PROMPT,
+        prompt: fullPrompt,
         maxTokens: 16384,
       });
       console.log(`[receipt-ocr] Gemini (${model}) responded, parsing structured receipt...`);
@@ -697,8 +746,9 @@ export function isCloudReceiptOcrEnabled(): boolean {
 
 export async function extractReceiptTextFromImage(
   imageUri: string,
+  catalogContext?: CatalogPromptItem[],
 ): Promise<ReceiptOcrAttempt> {
-  const attempt = await extractStructuredReceiptViaGemini(imageUri);
+  const attempt = await extractStructuredReceiptViaGemini(imageUri, catalogContext);
   if (attempt.structuredReceipt || attempt.extraction) return attempt;
 
   return {

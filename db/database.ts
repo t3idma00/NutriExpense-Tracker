@@ -36,6 +36,7 @@ export async function initDatabase(): Promise<void> {
 
   await ensureColumn(db, "daily_nutrition_logs", "confidence_score", "REAL");
   await ensureColumn(db, "daily_nutrition_logs", "source", "TEXT");
+  await ensureColumn(db, "expense_items", "catalog_id", "TEXT REFERENCES product_catalog(id)");
 
   initialized = true;
 }
